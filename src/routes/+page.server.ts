@@ -3,12 +3,18 @@ import { fail } from '@sveltejs/kit';
 import { env } from "$env/dynamic/private";
 import { errorMessage } from '$lib/stores';
 
-let form = {
+const form = {
 	firstName: '',
 	lastName: '',
 	email: '',
 	ticketAmount: 0,
 	consent: false
+}
+const errorMessages = {
+	doNotSell: '',
+	multipleEmailAccount: '',
+	creationAccountIdMissing: '',
+	moreThanOnePermission: ''
 }
 let sessionKey = ''
 // API structure
@@ -48,49 +54,55 @@ async function apiRequest<T>(
   }
 }
 // Utility
-async function searchConstituents() {
-	// search specific email
-	const specificEmailSearch = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}`, "POST")
-	let found = null
-	if (!specificEmailSearch) {
-		// incorrect at the moment
-		const searchAllEmail = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}`, "POST")
-		if (searchAllEmail) {
-			// remove inactive entries from responses
-			found = searchAllEmail
-		} else {
+function keepALog(message: string) {
 
-		}
-	}
-	if (!found) {
-		createConstituent()
-	} else {
-		const constituent = apiRequest(`CRM/Constituencies?constituentId=${found.Id}&includeAffiliations=false`,"POST")
-		if (constituent) {
-			if (constituent == "do not sell") {
-				return error
-			} else {
-				return constituent.id
-			}
-		} else {
+}
+function filterInactive(list: Record<string, any>) {
+	list["ConstituentSummaries"]
+}
+async function getConstituentId(): Promise<string> {
+	// search specific email
+	let constituentSummary = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}&atype=Web%20Login`)
+	if (!constituentSummary) {
+		const constituentAllEmails = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}`)
+		constituentSummary = constituentAllEmails.filter(constituent => constituent["Inactive"] == false)
+		if (constituentSummary.size == 0) {
+			return createConstituent()
+		} else if (constituentSummary.size > 1) {
 			return error
 		}
 	}
+	const constituent = await apiRequest(`CRM/Constituencies?constituentId=${constituentSummary.Id}&includeAffiliations=false`,"POST", undefined, true)
+	if (constituent == "do not sell") {
+		return errorMessage.set(errorMessages.doNotSell)
+	} else {
+		return constituent.id
+	}
+}
+async function createPermissions(constituentId: string) {
+	// create and update one call?
+	let getAllPermissions = apiRequest("ReferenceData/ContactPermissionTypes")
+	let filteredRecords = getAllPermissions.filter(constituent => constituent["Description"] == "Email" && constituent["Category"]["Description"] == "General")
+	if (filteredRecords.length == 1) {
+		let constituent = {
+			Constituent: {
+				Id: constituentId
+			},
+			Type: {
+				Id: constituentId
+			}
+		} 
+		apiRequest(`CRM/ContactPermissions`, "POST", constituent)
+	} else {
+		return keepALog(errorMessages.moreThanOnePermission)
+	}
 	
-}
-async function  checkConstituent() {
-	searchConstituents()
-	createConstituent()
-}
-async function createPermissions() {
-	getAllPermissionTypes()
 	// CRMFacade.ContactPermissions.Create(newPermission)
 }
 // Big Boys
 
 async function createConstituent() {
-	// CRM.Constituents.CreateConstituentUsingSnapshot(cd) -- could be replaced potentially
-	// CRM.WebLogins.Create
+	// Confirmed in docs that this creates a web login
 	let constituent = {
 		ConstituentTypeId: 32,
 		LastName: form.lastName,
@@ -98,44 +110,64 @@ async function createConstituent() {
 		OriginalSourceId: 32,
 		WebLogin: {
 			LoginTypeId: 32,
-			Password: ''
+			Password: "Th15154NEWUZ3r&*TUBBYWUZHERe%@#$"
 		}
 	}
-	let  createCall = apiRequest(`/Web/Registration/${sessionKey}/Register`, "POST", constituent)
-}
-async function updateContactPermissions() {
-	getAllContactPermissions()
-	contactPermissionsUpdate()
-	createPermissions()
-}
-async function createSeatOrder() {
-	// Web.Session.CreateSession() returns session key
-	// Web.Session.SetConstituent(session_key, setConstituentRequest)
-	// cart = Web.Cart.GetCartProperties(session_key)
-	// CRM.ElectronicAddresses.GetAll(constituentids: constituentid.toString(), includeAffiliations: false, primaryOnly: false)
-	// Filter
-	// set cart.deliveryMethodid = 6
-	// Web.Cart.UpdateCartProperties(session_key, cart)
-	let request = {
-		// NumberOfSeats: tickets,
-		// Performanceid: perf_no,
-		// PriceType: String.Join(",", Enumerable.Repeat(price_type, attendance.NumberOfTickets)),
-		// Zoneid: zone_no,
-		// Unseated: false,
-		// SpecialRequests: "ContiguousSeats=1&"
+	const constituentCall = apiRequest<Record<string, any>>(`/Web/Registration/${sessionKey}/Register`, "POST", constituent, true)
+	if (!constituentCall) {
+		errorMessage.set(errorMessages.creationIdMissing)
+		return null
 	}
-	// Web.Cart.ReserveTickets(session_key, request)
-	// CheckoutRequest checkoutRequest
+	return constituentCall["LoginInfo"]["ConstituentId"]
+}
+
+async function updateContactPermissions(constituentId: string) {
+	let constituentContact = apiRequest<Record<string, any>[]>(`CRM/ContactPermissions?constituentId=${constituentId}&includeAffiliations=false&activeOnly=true`, "GET", )
+	if (constituentContact) {
+		let filterFound = constituentContact.filter(constituent => constituent["Type"]["Description"] == "Email" && constituent["Type"]["Category"]["Description"] == "General")
+		if (filterFound.length > 0) {
+			if (!filterFound["Type"]["Category"]["Description"] == form.consent) { //?????
+				contactPermissionsUpdate()
+			}
+		} else if (!form.consent){
+			createPermissions(constituentId)
+		}
+	}
+}
+
+async function createSeatOrder(constituentId: string) {
+	// Session key created already
+	apiRequest(`Web/Session/${sessionKey}/Constituents`, "PUT", {ConstituentId: constituentId})
+	let cart = await apiRequest<Record<string, any>>(`Web/Cart/${sessionKey}/Properties`)
+	let allConstituents = await apiRequest(`CRM/ElectronicAddresses?constituentIds=${constituentId}&includeAffiliations=false&primaryOnly=false`)
+	let filteredConstituents = filterInactive(allConstituents)
+	// Sort with primary at top
+	if (filteredConstituents.length == 0) {
+		cart['electronicAddressId'] = "top address"
+	}
+	cart['deliveryMethodId'] = 6
+	apiRequest(`Web/Cart/${sessionKey}/Properties`, "PUT", cart)
+	let request = {
+		NumberOfSeats: form.ticketAmount,
+		Performanceid: globalFestival.perf_no,
+		PriceType: String.Join(",", Enumerable.Repeat(price_type, attendance.NumberOfTickets)), //wut
+		Zoneid: zone_no, //wut
+		Unseated: false,
+		SpecialRequests: "ContiguousSeats=1&" //wut
+	}
+	apiRequest(`Web/Cart/${sessionKey}/Tickets`, "POST", request)
 	let checkoutRequest = {
 		Amount: "0.00m",
 		Authorize: true,
-		AllowUnderPayment: true
 	}
-	// WebAssembly.Cart.Checkout(sesson_key, checkoutRequest)
+	let orderResult = apiRequest(`Web/Cart/${sessionKey}/Checkout`, "POST", checkoutRequest)
 	// let orderresult = Web.Session.Get(session_key)
 }
 async function orchestrator() {
 	sessionKey = await apiRequest<string>(`/Web/Session`, "POST", undefined, true) ?? ''
+	let constituentId: string | null = await getConstituentId()
+	updateContactPermissions(constituentId)
+	createSeatOrder(constituentId)
 }
 export const actions = {
 	default: async ({ request }) => {
