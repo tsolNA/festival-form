@@ -1,40 +1,17 @@
-import { env } from "$env/dynamic/private";
+import { apiRequest } from "$lib/server/api";
+import { errorMessage } from "$lib/stores";
 
-export async function GET(): Promise<Response> {
-  try {
-    const response = await fetch(`${env.TESSITURA_TEST_ENDPOINT}/Custom/Execute`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        Authorization: `Basic ${env.TESSITURA_API_KEY}`,
-        // Authorization: `Basic ${env.TESSITURA_API_KEY}`,
-      },
-      body: JSON.stringify({
-        ProcedureName: "LP_PerformanceAndProductSearch",
-        ProcedureId: 151,
-        ParameterValues: [
-          { Name: "perf_dt_from", Value: "2025-11-1" },
-          { Name: "perf_dt_to", Value: "" },
-          { Name: "onsale", Value: "1" },
-          { Name: "keyword_ids", Value: "437, 436" }
-        ]
-      }),
-    });
-
-    if (!response.ok) {
-      return new Response("Request failed", { status: response.status });
+export async function GET(): Promise<Record<string, any> | void> {
+  let rawEvents = await apiRequest<Record<string,any>[]>(`ReferenceData/Seasons?filter={filter}&maintenanceMode={maintenanceMode}&activeOnly={activeOnly}`)
+  if (rawEvents) {
+    let today = new Date()
+    let filtered = rawEvents.filter(singleEvent => new Date(singleEvent["StartDateTime"]) >= today && new Date(singleEvent["EndDateTime"]) <= today)
+    
+    if (filtered.length == 1) {
+      apiRequest(`TXN/ProductionSeasons?seasonIds={seasonIds}&productionIds={productionIds}&titleIds={titleIds}&ids={ids}`) //need seasonId
+    } else {
+      errorMessage.set("too many fiscal years")
     }
-
-    const data = await response.json();
-
-    return new Response(JSON.stringify(data), {
-      headers: { "Content-Type": "application/json" },
-    });
-
-  } catch (err) {
-    console.error("FETCH ERROR:", err);
-
-    return new Response("Fetch failed", { status: 500 });
   }
+  return result
 }

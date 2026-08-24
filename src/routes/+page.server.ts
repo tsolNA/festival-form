@@ -1,7 +1,7 @@
 import type { Actions } from './$types';
 import { fail } from '@sveltejs/kit';
-import { env } from "$env/dynamic/private";
 import { errorMessage } from '$lib/stores';
+import { apiRequest } from '$lib/server/api';
 
 const form = {
 	firstName: '',
@@ -18,41 +18,7 @@ const errorMessages = {
 }
 let sessionKey = ''
 // API structure
-async function apiRequest<T>(
-  url: string, 
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', 
-  bodyData?: Record<string, any>,
-  strict?: boolean
-): Promise<T | null> {
-  try {
-    const config: RequestInit = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    };
 
-    // Body only exists on non-GET calls
-    if (method !== 'GET' && bodyData) {
-      config.body = JSON.stringify(bodyData);
-    }
-
-    const response = await fetch(env.TESSITURA_TEST_ENDPOINT + url, config);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    return await response.json() as T;
-  } catch (error) {
-    console.error(`API Request failed for ${url}:`, error);
-	errorMessage.set(String(error))
-	if (strict) {
-		process.exitCode = 1
-	}
-    return null;
-  }
-}
 // Utility
 function keepALog(message: string) {
 
@@ -60,7 +26,7 @@ function keepALog(message: string) {
 function filterInactive(list: Record<string, any>) {
 	list["ConstituentSummaries"]
 }
-async function getConstituentId(): Promise<string> {
+async function getConstituentId(): Promise<string | void> {
 	// search specific email
 	let constituentSummary = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}&atype=Web%20Login`)
 	if (!constituentSummary) {
@@ -147,7 +113,7 @@ async function createSeatOrder(constituentId: string) {
 	}
 	cart['deliveryMethodId'] = 6
 	apiRequest(`Web/Cart/${sessionKey}/Properties`, "PUT", cart)
-	let request = {
+	const request = {
 		NumberOfSeats: form.ticketAmount,
 		Performanceid: globalFestival.perf_no,
 		PriceType: String.Join(",", Enumerable.Repeat(price_type, attendance.NumberOfTickets)), //wut
@@ -156,11 +122,21 @@ async function createSeatOrder(constituentId: string) {
 		SpecialRequests: "ContiguousSeats=1&" //wut
 	}
 	apiRequest(`Web/Cart/${sessionKey}/Tickets`, "POST", request)
-	let checkoutRequest = {
+	const checkoutRequest = {
 		Amount: "0.00m",
-		Authorize: true,
+		Authorize: true, //?
+		AllowUnderPayment: true
 	}
-	let orderResult = apiRequest(`Web/Cart/${sessionKey}/Checkout`, "POST", checkoutRequest)
+	apiRequest(`Web/Cart/${sessionKey}/Checkout`, "POST", checkoutRequest)
+	const orderResult = apiRequest(`Web/Session/${sessionKey}`)
+	const printOrderRequest = {
+		NewTicketNoForReprints: true,
+		OrderId: orderResult['OrderId'],
+		TicketDesignId: 2127,
+		PrinterType: "Z",
+		ReprintTickets: true
+	}
+	let print = apiRequest(`Web/Cart/${sessionKey}/Print/PrintStrings`, "POST", printOrderRequest)
 	// let orderresult = Web.Session.Get(session_key)
 }
 async function orchestrator() {
