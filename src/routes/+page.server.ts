@@ -1,15 +1,160 @@
 import type { Actions } from './$types';
 import { fail } from '@sveltejs/kit';
+import { errorMessage } from '$lib/stores';
+import { apiRequest } from '$lib/server/api';
+// Address backticks and quotes for all entries
+const form = {
+	firstName: '',
+	lastName: '',
+	email: '',
+	ticketAmount: 0,
+	consent: false
+}
+const errorMessages = {
+	doNotSell: '',
+	multipleEmailAccount: '',
+	creationAccountIdMissing: '',
+	moreThanOnePermission: ''
+}
+let sessionKey = ''
+// API structure
 
+// Utility
+function keepALog(message: string) {
+
+}
+function filterInactive(list: Record<string, any>) {
+	list["ConstituentSummaries"]
+}
+async function getConstituentId(): Promise<string | void> {
+	// search specific email
+	let constituentSummary = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}&atype=Web%20Login`)
+	if (!constituentSummary) {
+		const constituentAllEmails = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}`)
+		constituentSummary = constituentAllEmails.filter(constituent => constituent["Inactive"] == false)
+		if (constituentSummary.size == 0) {
+			return createConstituent()
+		} else if (constituentSummary.size > 1) {
+			return error
+		}
+	}
+	const constituent = await apiRequest(`CRM/Constituencies?constituentId=${constituentSummary.Id}&includeAffiliations=false`,"POST", undefined, true)
+	if (constituent == "do not sell") {
+		return errorMessage.set(errorMessages.doNotSell)
+	} else {
+		return constituent.id
+	}
+}
+async function createPermissions(constituentId: string) {
+	// create and update one call?
+	let getAllPermissions = apiRequest("ReferenceData/ContactPermissionTypes")
+	let filteredRecords = getAllPermissions.filter(constituent => constituent["Description"] == "Email" && constituent["Category"]["Description"] == "General")
+	if (filteredRecords.length == 1) {
+		let constituent = {
+			Constituent: {
+				Id: constituentId
+			},
+			Type: {
+				Id: constituentId
+			}
+		} 
+		apiRequest(`CRM/ContactPermissions`, "POST", constituent)
+	} else {
+		return keepALog(errorMessages.moreThanOnePermission)
+	}
+	
+	// CRMFacade.ContactPermissions.Create(newPermission)
+}
+// Big Boys
+
+async function createConstituent() {
+	// Confirmed in docs that this creates a web login
+	const tCustomerId = 32 //not accurate
+	let constituent = {
+		ConstituentTypeId: tCustomerId,
+		LastName: form.lastName,
+		FirstName: form.firstName,
+		OriginalSourceId: tCustomerId,
+		WebLogin: {
+			LoginTypeId: tCustomerId,
+			Password: "Th15154NEWUZ3r&*TUBBYWUZHERe%@#$"
+		}
+	}
+	const constituentCall = apiRequest<Record<string, any>>(`/Web/Registration/${sessionKey}/Register`, "POST", constituent, true)
+	if (!constituentCall) {
+		errorMessage.set(errorMessages.creationIdMissing)
+	}
+	return constituentCall["LoginInfo"]["ConstituentId"]
+}
+
+async function updateContactPermissions(constituentId: string) {
+	let constituentContact = apiRequest<Record<string, any>[]>(`CRM/ContactPermissions?constituentId=${constituentId}&includeAffiliations=false&activeOnly=true`, "GET", )
+	if (constituentContact) {
+		let filterFound = constituentContact.filter(constituent => constituent["Type"]["Description"] == "Email" && constituent["Type"]["Category"]["Description"] == "General")
+		if (filterFound.length > 0) {
+			if ((filterFound["Type"]["Category"]["Description"] == "Y") == form.consent) { //??????????????
+				contactPermissionsUpdate() //WRITE THIS DUMMY
+			}
+		} else if (!form.consent){
+			createPermissions(constituentId)
+		}
+	}
+}
+
+async function createSeatOrder(constituentId: string) {
+	// Session key created already
+	apiRequest(`Web/Session/${sessionKey}/Constituents`, "PUT", {ConstituentId: constituentId})
+	let cart = await apiRequest<Record<string, any>>(`Web/Cart/${sessionKey}/Properties`)
+	let allConstituents = await apiRequest(`CRM/ElectronicAddresses?constituentIds=${constituentId}&includeAffiliations=false&primaryOnly=false`)
+	let filteredConstituents = filterInactive(allConstituents)
+	// Sort with primary at top
+	if (filteredConstituents.length == 0) {
+		cart['electronicAddressId'] = "top address"
+	}
+	cart['deliveryMethodId'] = 6
+	apiRequest(`Web/Cart/${sessionKey}/Properties`, "PUT", cart)
+	const request = {
+		NumberOfSeats: form.ticketAmount,
+		Performanceid: globalFestival.perf_no,
+		PriceType: String.Join(",", Enumerable.Repeat(price_type, attendance.NumberOfTickets)), //wut
+		Zoneid: zone_no, //wut
+		Unseated: false,
+		SpecialRequests: "ContiguousSeats=1&" //wut
+	}
+	apiRequest(`Web/Cart/${sessionKey}/Tickets`, "POST", request)
+	const checkoutRequest = {
+		Amount: "0.00m",
+		Authorize: true, //?
+		AllowUnderPayment: true
+	}
+	apiRequest(`Web/Cart/${sessionKey}/Checkout`, "POST", checkoutRequest)
+	const orderResult = apiRequest(`Web/Session/${sessionKey}`)
+	const printOrderRequest = {
+		NewTicketNoForReprints: true,
+		OrderId: orderResult['OrderId'],
+		TicketDesignId: 2127,
+		PrinterType: "Z",
+		ReprintTickets: true
+	}
+	let print = apiRequest(`Web/Cart/${sessionKey}/Print/PrintStrings`, "POST", printOrderRequest)
+	// let orderresult = Web.Session.Get(session_key)
+}
+async function orchestrator() {
+	sessionKey = await apiRequest<string>(`/Web/Session`, "POST", undefined, true) ?? ''
+	let constituentId: string | null = await getConstituentId()
+	updateContactPermissions(constituentId)
+	createSeatOrder(constituentId)
+}
 export const actions = {
 	default: async ({ request }) => {
 		const data = await request.formData();
 
-		const firstName = data.get('firstName') as string | null;
-		const lastName = data.get('lastName') as string | null;
-		const email = data.get('email') as string | null;
-		const ticketAmountRaw = data.get('ticketAmount') as string | null;
-		const consent = data.has('consent');
+		form.firstName = data.get('firstName')?.toString() ?? ''
+		form.lastName = data.get('lastName')?.toString() ?? ''
+		form.email = data.get('email')?.toString() ?? ''
+		form.ticketAmount = Math.trunc(Number(data.get('ticketAmount'))) ?? 1
+		form.consent = data.has('consent');
+
 
 		const errors: Record<string, string> = {};
 
@@ -24,27 +169,24 @@ export const actions = {
 
 		// ---- Validation ----
 
-		if (!firstName || firstName.trim().length < 2 || !isSafeString(firstName)) {
+		if (!form.firstName || form.firstName.trim().length < 2 || !isSafeString(form.firstName)) {
 			errors.firstName =
 				'First name must be at least 2 characters and contain only valid characters.';
 		}
 
-		if (!lastName || lastName.trim().length < 2 || !isSafeString(lastName)) {
+		if (!form.lastName || form.lastName.trim().length < 2 || !isSafeString(form.lastName)) {
 			errors.lastName =
 				'Last name must be at least 2 characters and contain only valid characters.';
 		}
 
-		if (!email || !isEmailValid(email)) {
+		if (!form.email || !isEmailValid(form.email)) {
 			errors.email = 'Invalid email format.';
 		}
 
-		const ticketAmount = Number(ticketAmountRaw);
-
 		if (
-			!ticketAmountRaw ||
-			!Number.isInteger(ticketAmount) ||
-			ticketAmount < 1 ||
-			ticketAmount > 10
+			!form.ticketAmount ||
+			form.ticketAmount < 1 ||
+			form.ticketAmount > 10
 		) {
 			errors.ticketAmount =
 				'Ticket amount must be an integer between 1 and 10.';
@@ -58,17 +200,11 @@ export const actions = {
 				errors
 			});
 		}
-
+		orchestrator()
 		// ---- Success ----
 		return {
 			success: true,
-			data: {
-				firstName,
-				lastName,
-				email,
-				ticketAmount,
-				consent
-			}
+			data: form
 		};
 	}
 } satisfies Actions;

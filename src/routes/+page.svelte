@@ -1,4 +1,5 @@
 <script lang='ts'>
+	import { errorMessage } from '$lib/stores';
   import { onMount } from 'svelte';
   // declares the packaged event parameters
   interface Event {
@@ -100,8 +101,16 @@
       adminPass = ''
       adminCheck = false
     }
+    
+  })
+  $effect(() => {
     if (Object.keys(selectedOption).length !== 0) {
       setEvent(selectedOption)
+    }
+  })
+  $effect(() => {
+    if ($errorMessage !== '') {
+      alert($errorMessage)
     }
   })
   onMount(() => {
