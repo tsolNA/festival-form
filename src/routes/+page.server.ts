@@ -69,6 +69,7 @@ async function createPermissions(constituentId: string) {
 
 async function createConstituent() {
 	// Confirmed in docs that this creates a web login
+<<<<<<< HEAD
 	const tCustomerId = 32 //not accurate
 	let constituent = {
 		ConstituentTypeId: tCustomerId,
@@ -77,12 +78,25 @@ async function createConstituent() {
 		OriginalSourceId: tCustomerId,
 		WebLogin: {
 			LoginTypeId: tCustomerId,
+=======
+	let constituent = {
+		ConstituentTypeId: 32,
+		LastName: form.lastName,
+		FirstName: form.firstName,
+		OriginalSourceId: 32,
+		WebLogin: {
+			LoginTypeId: 32,
+>>>>>>> f504d8837de3513aa95c28189091dbed38a2e05e
 			Password: "Th15154NEWUZ3r&*TUBBYWUZHERe%@#$"
 		}
 	}
 	const constituentCall = apiRequest<Record<string, any>>(`/Web/Registration/${sessionKey}/Register`, "POST", constituent, true)
 	if (!constituentCall) {
 		errorMessage.set(errorMessages.creationIdMissing)
+<<<<<<< HEAD
+=======
+		return null
+>>>>>>> f504d8837de3513aa95c28189091dbed38a2e05e
 	}
 	return constituentCall["LoginInfo"]["ConstituentId"]
 }
@@ -92,8 +106,13 @@ async function updateContactPermissions(constituentId: string) {
 	if (constituentContact) {
 		let filterFound = constituentContact.filter(constituent => constituent["Type"]["Description"] == "Email" && constituent["Type"]["Category"]["Description"] == "General")
 		if (filterFound.length > 0) {
+<<<<<<< HEAD
 			if ((filterFound["Type"]["Category"]["Description"] == "Y") == form.consent) { //??????????????
 				contactPermissionsUpdate() //WRITE THIS DUMMY
+=======
+			if (!filterFound["Type"]["Category"]["Description"] == form.consent) { //?????
+				contactPermissionsUpdate()
+>>>>>>> f504d8837de3513aa95c28189091dbed38a2e05e
 			}
 		} else if (!form.consent){
 			createPermissions(constituentId)
