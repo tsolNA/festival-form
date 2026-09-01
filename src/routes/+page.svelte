@@ -124,6 +124,7 @@
       <input type="pin" bind:value={adminPass}>
     </div>
   {:else if (Object.keys(selectedOption).length == 0)}
+  <!-- Keep the select option, make user validate -->
     <div class="page-container">
       <select name="festival" id="" bind:value={selectedOption}>
         {#each Object.entries(allEvents) as [key, value]}
