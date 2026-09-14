@@ -23,11 +23,6 @@
 
   const nameRegex = /^[a-zA-ZÀ-ÿ' -]{2,}$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  // Sets the event object to local storage
-  function setEvent(event: Event) {
-    let string =  JSON.stringify(event)
-    localStorage.setItem('event', string)
-  }
   async function loadOptions() {
     try {
       const res = await fetch("/api/getOptions");
@@ -48,6 +43,11 @@
     } catch (err) {
       console.error(err);
     }
+  }
+  // Sets the event object to local storage
+  function setEvent(event: Event) {
+    let string =  JSON.stringify(event)
+    localStorage.setItem('event', string)
   }
   // Validations are based on the Tessitura requirements
   function validateFirstName() {
@@ -96,7 +96,7 @@
 
   $effect(() =>  {
     if (adminPass == '1933') {
-      loadOptions()
+      // call to server.ts
       selectedOption = {}
       adminPass = ''
       adminCheck = false

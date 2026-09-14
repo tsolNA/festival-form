@@ -14,11 +14,12 @@ declare global {
         }
     }
     interface TessPerformance {
+        Id: string
         AvailSaleIndicator: boolean,
         Date: string,
-        Id: string
     }
     interface PerformancePrices {
+        PerformanceId: string,
         Enabled: boolean,
         ZoneId: number
     }

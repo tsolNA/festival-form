@@ -1,6 +1,5 @@
 import { apiRequest } from "$lib/server/api";
 import { errorMessage, performanceId } from "$lib/stores";
-import { json } from "@sveltejs/kit";
 import { get } from "svelte/store";
 
 function isDateToday(date: string) {
@@ -8,12 +7,8 @@ function isDateToday(date: string) {
   let dateConverted = new Date(date).setHours(0, 0, 0, 0)
   return today == dateConverted
 }
-
-function returnFunction() {
-// write the structure for the return here
-}
 // Gets the performance of the day for the thing to work in general
-export async function GET(): Promise<Response | void> {
+export async function getOptions(): Promise<string | void> {
   let rawEvents = await apiRequest<Array<TessSeason>>(`ReferenceData/Seasons`, "GET")
   if (!rawEvents) {
     errorMessage.set("Nothing in ReferenceData/Seasons")
@@ -21,7 +16,7 @@ export async function GET(): Promise<Response | void> {
   }
   let today = new Date()
   // If testing without filter, set activeOnly to true in query param
-  let filteredForTime = rawEvents.filter(singleEvent => new Date(singleEvent["StartDateTime"]) <= today && new Date(singleEvent["EndDateTime"]) >= today)
+  let filteredForTime = rawEvents.filter(singleEvent => new Date(singleEvent["StartDateTime"]) >= today && new Date(singleEvent["EndDateTime"]) <= today)
   let filteredMuseumAdmission = null
   let filteredForAvailable = null;
   let filteredForBaseIndicator = null;
@@ -73,5 +68,5 @@ export async function GET(): Promise<Response | void> {
     errorMessage.set("too many price types")
     return
   }
-  return json({message: "complete"})
+  return "Success"
 }
