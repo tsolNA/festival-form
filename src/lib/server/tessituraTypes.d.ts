@@ -8,26 +8,34 @@ declare global {
         Id: string,
     }
     interface ProductionSeason {
-        Id: number,
+        Id: string,
         Production: {
             Description: string
         }
     }
     interface TessPerformance {
-        Id: string
+        Id: string,
         AvailSaleIndicator: boolean,
         Date: string,
+    }
+    interface TessPerformanceResponse {
+        ok: boolean,
+        errorMessage: string,
+        id: string,
+        name: string,
+        data?: any
     }
     interface PerformancePrices {
         PerformanceId: string,
         Enabled: boolean,
-        ZoneId: number
+        ZoneId: string
     }
     interface TessPriceType {
-        PriceTypeId: number
+        PriceTypeId: string
         BaseIndicator: boolean,
         PerformancePrices: Array<Record<string, PerformancePrices>>
     }
+    
 }
 
 export {}

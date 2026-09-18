@@ -6,6 +6,8 @@
     name: string;
     perfNum: number;
   }
+  let { data } = $props(); 
+  $inspect(data)
   let firstName = $state('');
   let lastName = $state('');
   let email = $state('');

@@ -1,10 +1,11 @@
 import { env } from "$env/dynamic/private";
-import { errorMessage } from "../stores";
+import { errorMessage } from "$lib/stores";
 
 export async function apiRequest<T>(
   url: string, 
+  customFetch?: typeof fetch,
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', 
-  bodyData?: Record<string, any>,
+  bodyData?: Record<string, any>
 ): Promise<T | null> {
   try {
     const config: RequestInit = {
@@ -15,13 +16,15 @@ export async function apiRequest<T>(
       },
     };
 
-    // Body only exists on non-GET calls
     if (method !== 'GET' && bodyData) {
       config.body = JSON.stringify(bodyData);
-      console.log("body")
+      console.log("body");
     }
 
-    const response = await fetch(env.TESSITURA_TEST_ENDPOINT + url, config);
+    // Use customFetch if provided, otherwise default to global fetch
+    const fetcher = customFetch || fetch;
+
+    const response = await fetcher(env.TESSITURA_TEST_ENDPOINT + url, config);
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
@@ -29,7 +32,7 @@ export async function apiRequest<T>(
     return data;
   } catch (error) {
     console.error(`API Request failed for ${url}:`, error );
-    errorMessage.set(String(error))
+    errorMessage.set(String(error));
     return null;
   }
 }
