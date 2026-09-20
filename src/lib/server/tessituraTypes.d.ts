@@ -21,12 +21,10 @@ declare global {
     interface TessPerformanceResponse {
         ok: boolean,
         errorMessage: string,
-        id: string,
-        name: string,
         data?: any
     }
     interface PerformancePrices {
-        PerformanceId: string,
+        Id: string,
         Enabled: boolean,
         ZoneId: string
     }

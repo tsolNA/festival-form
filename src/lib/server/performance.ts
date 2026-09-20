@@ -16,8 +16,6 @@ async function filterMuseumAdmission(customFetch: typeof fetch): Promise<TessPer
   if (!rawEvents) {
     return {
       errorMessage: "Nothing in ReferenceData/Seasons",
-      name: '',
-      id: '',
       ok: false
     }
   }
@@ -30,23 +28,20 @@ async function filterMuseumAdmission(customFetch: typeof fetch): Promise<TessPer
     if (!productionSeasons) {
       return {
         errorMessage: "Nothing in TXN/ProductionSeasons",
-        name: '',
-        id: '',
         ok: false
       }
     }
     let filteredMuseumAdmission = productionSeasons.filter(productionSeason => productionSeason["Production"]["Description"] == "Museum Admission") //*Night Shift & Deaf cultural need their own check
     return {
       errorMessage: "",
-      name: '',
-      id: filteredMuseumAdmission[0]["Id"],
       ok: true,
+      data: {
+        id: filteredMuseumAdmission[0]["Id"],
+      }
     } 
   } else {
     return {
       errorMessage: "too many fiscal years",
-      name: '',
-      id: '',
       ok: false
     }
   }
@@ -57,8 +52,6 @@ async function findAvailable(customFetch: typeof fetch, id: string): Promise<Tes
   if (!performances) {
     return {
       errorMessage: "Nothing in TXN/Performances",
-      name: '',
-      id: '',
       ok: false
     }
   }
@@ -66,15 +59,14 @@ async function findAvailable(customFetch: typeof fetch, id: string): Promise<Tes
   if (filteredForAvailable.length == 1) {
     return {
       errorMessage: "",
-      name: '',
-      id: filteredForAvailable[0]["Id"],
-      ok: true
+      ok: true,
+      data: {
+        id: filteredForAvailable[0]["Id"],
+      }
     } 
   } else {
     return {
       errorMessage: "too many avaiable to sell",
-      name: '',
-      id: '',
       ok: false,
     }
   }
@@ -85,42 +77,33 @@ async function findBaseIndicator(customFetch: typeof fetch, performanceId: strin
   if (!priceType) {
     return {
       errorMessage: "Nothing in TXN/PerformancePriceTypes",
-      name: '',
-      id: '',
       ok: false,
     }
   }
   
   let filteredForBaseIndicator = priceType.filter(type => type["BaseIndicator"] == true)
-  return {
-    errorMessage: "Nothing in TXN/PerformancePriceTypes",
-    name: '',
-    id: '',
-    ok: false,
-    data: filteredForBaseIndicator[0]
-  }
   if (filteredForBaseIndicator.length == 1) {
-    let filteredForPriceTypes = filteredForBaseIndicator[0]["PerformancePrices"].filter(performancePrices => performancePrices["PerformancePrices"]["Enabled"] == true)
+    let filteredForPriceTypes = filteredForBaseIndicator[0]["PerformancePrices"].filter(performancePrices => performancePrices["Enabled"] == true)
     if (filteredForPriceTypes.length == 1) {
       return {
         errorMessage: "",
-        name: '',
-        id: filteredForPriceTypes[0]["PerformancePrices"]["PerformanceId"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
-        ok: true
+        ok: true,
+        data: {
+          PriceTypeId: filteredForPriceTypes[0]["Id"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
+          ZoneId: filteredForPriceTypes[0]["ZoneId"],
+          TicketDesignId: filteredForBaseIndicator[0]
+        },
+
       } 
     } else {
       return {
       errorMessage: "More than one zone in price type",
-      name: '',
-      id: '',
       ok: false,
     }
     }
   } else {
     return {
       errorMessage: "too many price types",
-      name: '',
-      id: '',
       ok: false,
     }
   }
@@ -129,13 +112,17 @@ async function findBaseIndicator(customFetch: typeof fetch, performanceId: strin
 // Gets the performance of the day for the thing to work in general
 export async function loadPerformanceOptions(customFetch: typeof fetch): Promise<TessPerformanceResponse> {
   let filteredMuseumAdmission = await filterMuseumAdmission(customFetch)
-  if (!filteredMuseumAdmission.ok) {
+  if (!filteredMuseumAdmission.ok || !filteredMuseumAdmission.data.id) {
     return filteredMuseumAdmission
   }
-  let filteredForAvailable = await findAvailable(customFetch, filteredMuseumAdmission.id)
 
-  let filteredForBaseIndicator = await findBaseIndicator(customFetch, filteredForAvailable.id)
+  let filteredForAvailable = await findAvailable(customFetch, filteredMuseumAdmission.data.id)
+  if (!filteredForAvailable.ok || !filteredForAvailable.data.id) {
+    return filteredForAvailable
+  }
 
+  let filteredForBaseIndicator = await findBaseIndicator(customFetch, filteredForAvailable.data.id)
+  
   return filteredForBaseIndicator
 
   
