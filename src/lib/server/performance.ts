@@ -91,7 +91,7 @@ async function findBaseIndicator(customFetch: typeof fetch, performanceId: strin
         data: {
           PriceTypeId: filteredForPriceTypes[0]["Id"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
           ZoneId: filteredForPriceTypes[0]["ZoneId"],
-          TicketDesignId: filteredForBaseIndicator[0]
+          TicketDesignId: filteredForBaseIndicator[0]["TicketDesignId"]
         },
 
       } 
