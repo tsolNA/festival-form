@@ -36,3 +36,18 @@ export async function apiRequest<T>(
     return null;
   }
 }
+
+export function internalResponse(ok: boolean, data: object) {
+  if (ok) {
+    return {
+      ok: true,
+      errorMessage: "",
+      data: data
+    }
+  } else {
+    return {
+      errorMessage: data.errorMessage,
+      ok: false
+    }
+  }
+}

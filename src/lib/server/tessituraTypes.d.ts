@@ -32,6 +32,7 @@ declare global {
         PriceTypeId: string
         BaseIndicator: boolean,
         PerformancePrices: Array<Record<string, PerformancePrices>>
+        TicketDesignId: string
     }
     
 }
