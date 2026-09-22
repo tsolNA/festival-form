@@ -12,27 +12,29 @@ export async function apiRequest<T>(
       method,
       headers: {
         'Accept': 'application/json',
+        'Content-Type': 'application/json',
         'Authorization': env.AUTH_KEY as string
       },
     };
-
     if (method !== 'GET' && bodyData) {
       config.body = JSON.stringify(bodyData);
-      console.log("body");
+      console.log(config)
     }
 
     // Use customFetch if provided, otherwise default to global fetch
     const fetcher = customFetch || fetch;
 
     const response = await fetcher(env.TESSITURA_TEST_ENDPOINT + url, config);
+    console.log(response)
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
     const data = await response.json() as T;
     return data;
   } catch (error) {
-    console.error(`API Request failed for ${url}:`, error );
+    console.error(`API Request failed for ${env.TESSITURA_TEST_ENDPOINT + url}:`, error );
     errorMessage.set(String(error));
+    
     return null;
   }
 }

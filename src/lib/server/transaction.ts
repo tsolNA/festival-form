@@ -151,7 +151,7 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string)
 }
 
 export async function orchestrator(customFetch: typeof fetch) {
-	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {IpAddress: ''}) ?? {SessionKey: "nope"}
+	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {"string": "string"}) ?? {SessionKey: "nope"}
 	sessionKey = sessionKeyGet["SessionKey"]
 	// let constituentId = await getConstituentId(customFetch)
 	// updateContactPermissions(customFetch, constituentId.data.id)
