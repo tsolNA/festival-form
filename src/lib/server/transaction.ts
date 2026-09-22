@@ -1,12 +1,13 @@
+import { error } from "node:console";
 import { errorMessage } from "../stores";
-import { apiRequest } from "./api";
+import { apiRequest, internalResponse } from "./api";
 
 // Address backticks and quotes for all entries
 const form = {
-	firstName: '',
-	lastName: '',
-	email: '',
-	ticketAmount: 0,
+	firstName: 'Test',
+	lastName: 'McTesty',
+	email: 'tmctesty@nelson-atkins.org',
+	ticketAmount: 2,
 	consent: false
 }
 const errorMessageText = {
@@ -19,32 +20,63 @@ let sessionKey = ''
 // API structure
 
 // Utility
-function keepALog(message: string) {
 
-}
 function filterInactive(list: Record<string, any>) {
 	list["ConstituentSummaries"]
 }
-async function getConstituentId(customFetch: typeof fetch): Promise<string | void> {
-	// search specific email
-	let constituentSummary = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}&atype=Web%20Login`, customFetch)
-	if (!constituentSummary) {
-		const constituentAllEmails = await apiRequest(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}`, customFetch)
-		constituentSummary = constituentAllEmails.filter(constituent => constituent["Inactive"] == false)
-		if (constituentSummary.size == 0) {
+async function getConstituentId(customFetch: typeof fetch): Promise<TessPerformanceResponse> {
+	let constituentSummary = await apiRequest<Record<string, Array<ConstituentSummary>>>(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}&atype=Web%20Login`, customFetch)
+	let constituentArray = constituentSummary !== null ?  constituentSummary["ConstituentSummaries"] : []
+	if (constituentArray.length !== 1) {
+		const constituentAllEmails = await apiRequest<Record<string, Array<ConstituentSummary>>>(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}`, customFetch)
+		if (!constituentAllEmails) {
+			return internalResponse(false, {errorMessage: "No constituent ID found"})
+		}
+		constituentArray = constituentAllEmails["ConstituentSummaries"].filter(constituent => constituent["Inactive"] == "Y")
+		if (constituentArray.length == 0) {
 			return createConstituent(customFetch)
-		} else if (constituentSummary.size > 1) {
-			return error
+		} else if (constituentArray.length > 1) {
+			return internalResponse(false, {errorMessage: "No constituent ID found"})
 		}
 	}
-	const constituent = await apiRequest(`CRM/Constituencies?constituentId=${constituentSummary.Id}&includeAffiliations=false`, customFetch, "POST")
-	if (constituent == "do not sell") {
-		return errorMessage.set(errorMessageText.doNotSell)
+	return checkDNS(customFetch, constituentArray[0].Id)
+}
+
+async function checkDNS(customFetch: typeof fetch, constituentId: string): Promise<TessPerformanceResponse> {
+	const constituents = await apiRequest<Array<Constituent>>(`CRM/Constituencies?constituentId=${constituentId}`, customFetch, "GET")
+	if (!constituents) {
+		return internalResponse(false, {errorMessage: "Constituent Not Found"})
 	} else {
-		return constituent.id
+		let dnsFilter = constituents.filter(constituent => constituent["ConstituencyType"]["ShortDescription"] == "DNS")
+		if (dnsFilter.length > 0) {
+			return internalResponse(false, {errorMessage: "Do not sell"})
+		} else {
+			return internalResponse(true, {id: constituentId})
+		}
 	}
 }
-async function createPermissions(customFetch: typeof fetch, constituentId: string) {
+
+async function createConstituent(customFetch: typeof fetch): Promise<TessPerformanceResponse> {
+	// Confirmed in docs that this creates a web login
+	const tCustomerId = 1 //not accurate
+	let constituent = {
+		ConstituentTypeId: tCustomerId,
+		LastName: form.lastName,
+		FirstName: form.firstName,
+		OriginalSourceId: tCustomerId,
+		WebLogin: {
+			LoginTypeId: tCustomerId,
+			Password: "Th15154NEWUZ3r&*TUBBYWUZHERe%@#$"
+		}
+	}
+	const constituentCall = await apiRequest<Record<string, any>>(`/Web/Registration/${sessionKey}/Register`, customFetch, "POST", constituent)
+	if (!constituentCall) {
+		return internalResponse(false, {errorMessage: "Creation Account Failure"})
+	}
+	return internalResponse(true, constituentCall["LoginInfo"]["ConstituentId"])
+}
+
+async function createPermissions(customFetch: typeof fetch, constituentId: string): Promise<TessPerformanceResponse> {
 	// create and update one call?
 	let getAllPermissions = apiRequest("ReferenceData/ContactPermissionTypes", customFetch)
 	let filteredRecords = getAllPermissions.filter(constituent => constituent["Description"] == "Email" && constituent["Category"]["Description"] == "General")
@@ -59,31 +91,10 @@ async function createPermissions(customFetch: typeof fetch, constituentId: strin
 		} 
 		apiRequest(`CRM/ContactPermissions`, customFetch, "POST", constituent)
 	} else {
-		return keepALog(errorMessageText.moreThanOnePermission)
+		return internalResponse(false, {errorMessage: errorMessageText.moreThanOnePermission})
 	}
 	
 	// CRMFacade.ContactPermissions.Create(newPermission)
-}
-// Big Boys
-
-async function createConstituent(customFetch: typeof fetch) {
-	// Confirmed in docs that this creates a web login
-	const tCustomerId = 32 //not accurate
-	let constituent = {
-		ConstituentTypeId: tCustomerId,
-		LastName: form.lastName,
-		FirstName: form.firstName,
-		OriginalSourceId: tCustomerId,
-		WebLogin: {
-			LoginTypeId: tCustomerId,
-			Password: "Th15154NEWUZ3r&*TUBBYWUZHERe%@#$"
-		}
-	}
-	const constituentCall = await apiRequest<Record<string, any>>(`/Web/Registration/${sessionKey}/Register`, customFetch, "POST", constituent)
-	if (!constituentCall) {
-		errorMessage.set(errorMessageText.creationAccountIdMissing)
-	}
-	return constituentCall["LoginInfo"]["ConstituentId"]
 }
 
 async function updateContactPermissions(customFetch: typeof fetch, constituentId: string) {
@@ -138,9 +149,14 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string)
 	let print = apiRequest(`Web/Cart/${sessionKey}/Print/PrintStrings`, customFetch, "POST", printOrderRequest)
 	// let orderresult = Web.Session.Get(session_key)
 }
+
 export async function orchestrator(customFetch: typeof fetch) {
-	sessionKey = await apiRequest<string>(`/Web/Session`, customFetch, "POST", undefined) ?? ''
-	let constituentId: string | null = await getConstituentId(customFetch)
-	updateContactPermissions(customFetch, constituentId)
-	createSeatOrder(customFetch, constituentId)
+	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {IpAddress: ''}) ?? {SessionKey: "nope"}
+	sessionKey = sessionKeyGet["SessionKey"]
+	// let constituentId = await getConstituentId(customFetch)
+	// updateContactPermissions(customFetch, constituentId.data.id)
+	// createSeatOrder(customFetch, constituentId.data.id)
+	// return checkDNS(customFetch, "342957")
+	// return createConstituent(customFetch)
+	return sessionKey
 }

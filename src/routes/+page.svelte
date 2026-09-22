@@ -139,6 +139,9 @@
     <div class="page-container">
       <button id="admin" onclick={() => adminCheck = true}>Admin</button>
       <h1>{selectedOption.name}</h1>
+      <button onclick={() => fetch('/api/test', { method: 'POST' })}>
+        Trigger Server
+      </button>
       <form method="POST">
         <label>
           First Name:

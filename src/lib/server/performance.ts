@@ -9,10 +9,7 @@ function isDateToday(date: string) {
 async function filterMuseumAdmission(customFetch: typeof fetch): Promise<TessPerformanceResponse> {
   let rawEvents = await apiRequest<Array<TessSeason>>(`ReferenceData/Seasons`, customFetch)
   if (!rawEvents) {
-    return {
-      errorMessage: "Nothing in ReferenceData/Seasons",
-      ok: false
-    }
+    return internalResponse(false, {errorMessage: "Nothing in ReferenceData/Seasons"})
   }
   let today = new Date()
   // If testing without filter, set activeOnly to true in query param

@@ -51,3 +51,7 @@ export function internalResponse(ok: boolean, data: object) {
     }
   }
 }
+
+export function keepALog(message: string) {
+
+}

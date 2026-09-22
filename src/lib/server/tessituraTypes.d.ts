@@ -1,6 +1,7 @@
 
 
 declare global {
+    // performance
     type TessBoolean = "Y" | "N"
     interface TessSeason {
         StartDateTime: string,
@@ -16,7 +17,7 @@ declare global {
     interface TessPerformance {
         Id: string,
         AvailSaleIndicator: boolean,
-        Date: string,
+        Date: string
     }
     interface TessPerformanceResponse {
         ok: boolean,
@@ -29,12 +30,21 @@ declare global {
         ZoneId: string
     }
     interface TessPriceType {
-        PriceTypeId: string
+        PriceTypeId: string,
         BaseIndicator: boolean,
-        PerformancePrices: Array<Record<string, PerformancePrices>>
+        PerformancePrices: Array<Record<string, PerformancePrices>>,
         TicketDesignId: string
     }
-    
+    // transaction
+    interface ConstituentSummary {
+        Inactive: TessBoolean,
+        Id: string
+    }
+    interface Constituent {
+        ConstituencyType: {
+            ShortDescription: string
+        }
+    }
 }
 
 export {}
