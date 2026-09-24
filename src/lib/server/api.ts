@@ -18,7 +18,6 @@ export async function apiRequest<T>(
     };
     if (method !== 'GET' && bodyData) {
       config.body = JSON.stringify(bodyData);
-      console.log(config)
     }
 
     // Use customFetch if provided, otherwise default to global fetch

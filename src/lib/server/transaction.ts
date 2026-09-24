@@ -43,7 +43,7 @@ async function getConstituentId(customFetch: typeof fetch): Promise<TessPerforma
 }
 
 async function checkDNS(customFetch: typeof fetch, constituentId: string): Promise<TessPerformanceResponse> {
-	const constituents = await apiRequest<Array<Constituent>>(`CRM/Constituencies?constituentId=${constituentId}`, customFetch, "GET")
+	const constituents = await apiRequest<Array<Constituent>>(`CRM/Constituencies?constituentId=${constituentId}`, customFetch, "GET") //342957 DNS
 	if (!constituents) {
 		return internalResponse(false, {errorMessage: "Constituent Not Found"})
 	} else {
@@ -58,20 +58,24 @@ async function checkDNS(customFetch: typeof fetch, constituentId: string): Promi
 
 async function createConstituent(customFetch: typeof fetch): Promise<TessPerformanceResponse> {
 	// Confirmed in docs that this creates a web login
-	const tCustomerId = 1 //not accurate
+	 //not accurate
 	let constituent = {
-		ConstituentTypeId: tCustomerId,
+		ConstituentTypeId: 1,
 		LastName: form.lastName,
 		FirstName: form.firstName,
-		OriginalSourceId: tCustomerId,
+		OriginalSourceId: 5,
+		PrimaryElectronicAddress: {
+			Address: form.email
+		},
 		WebLogin: {
-			LoginTypeId: tCustomerId,
-			Password: "Th15154NEWUZ3r&*TUBBYWUZHERe%@#$"
+			LoginTypeId: 1,
+			Password: "Th15154NEWUZ3r&*TUBBYWUZHERe@#%@$#%^FASF"
 		}
 	}
-	const constituentCall = await apiRequest<Record<string, any>>(`/Web/Registration/${sessionKey}/Register`, customFetch, "POST", constituent)
+	const constituentCall = await apiRequest<Record<string, any>>(`Web/Registration/${sessionKey}/Register`, customFetch, "POST", constituent)
+	
 	if (!constituentCall) {
-		return internalResponse(false, {errorMessage: "Creation Account Failure"})
+		return internalResponse(false, {errorMessage: "Account Creation Failure"})
 	}
 	return internalResponse(true, constituentCall["LoginInfo"]["ConstituentId"])
 }
@@ -153,10 +157,10 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string)
 export async function orchestrator(customFetch: typeof fetch) {
 	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {"string": "string"}) ?? {SessionKey: "nope"}
 	sessionKey = sessionKeyGet["SessionKey"]
-	// let constituentId = await getConstituentId(customFetch)
+	let constituentId = await getConstituentId(customFetch)
+	return constituentId
 	// updateContactPermissions(customFetch, constituentId.data.id)
 	// createSeatOrder(customFetch, constituentId.data.id)
 	// return checkDNS(customFetch, "342957")
 	// return createConstituent(customFetch)
-	return sessionKey
 }
