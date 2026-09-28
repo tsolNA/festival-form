@@ -45,6 +45,12 @@ declare global {
             ShortDescription: string
         }
     }
+    interface ContactPermissionTypes {
+        Description: string,
+        Category: {
+            Description: string
+        }
+    }
 }
 
 export {}

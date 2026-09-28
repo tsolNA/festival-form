@@ -81,36 +81,56 @@ async function createConstituent(customFetch: typeof fetch): Promise<TessPerform
 }
 
 async function createPermissions(customFetch: typeof fetch, constituentId: string): Promise<TessPerformanceResponse> {
-	// create and update one call?
-	let getAllPermissions = apiRequest("ReferenceData/ContactPermissionTypes", customFetch)
-	let filteredRecords = getAllPermissions.filter(constituent => constituent["Description"] == "Email" && constituent["Category"]["Description"] == "General")
+	// create and update one call? CreateORUpdate
+	
+	let getAllPermissions = await apiRequest<Array<ContactPermissionTypes>>("ReferenceData/ContactPermissionTypes", customFetch)
+	if (!getAllPermissions) {
+		return internalResponse(false, {errorMessage: "Contact Permission Type Not Found"})
+	}
+	let filteredRecords = getAllPermissions.filter(permissionType => permissionType["Description"] == "Email" && permissionType["Category"]["Description"] == "General")
 	if (filteredRecords.length == 1) {
-		let constituent = {
+		let requestObject = {
 			Constituent: {
 				Id: constituentId
 			},
 			Type: {
-				Id: constituentId
+				Id: 1,
+				Description: "Email",
+				Category: {
+					Id: 1,
+					Description: "General"
+				},
+				// Inactive: false
 			}
+			
 		} 
-		apiRequest(`CRM/ContactPermissions`, customFetch, "POST", constituent)
+
+		let permissions = await apiRequest(`CRM/ContactPermissions`, customFetch, "POST", requestObject)
+		if (!permissions) {
+			return internalResponse(false, {errorMessage: "Permissions not added"})
+		}
+		return internalResponse(true, {data: permissions})
 	} else {
 		return internalResponse(false, {errorMessage: errorMessageText.moreThanOnePermission})
 	}
 	
-	// CRMFacade.ContactPermissions.Create(newPermission)
+	CRMFacade.ContactPermissions.Create(newPermission)
 }
 
 async function updateContactPermissions(customFetch: typeof fetch, constituentId: string) {
-	let constituentContact = apiRequest<Record<string, any>[]>(`CRM/ContactPermissions?constituentId=${constituentId}&includeAffiliations=false&activeOnly=true`, customFetch)
+	let constituentContact = await apiRequest<Array<Record<string, any>>>(`CRM/ContactPermissions?constituentId=${constituentId}&includeAffiliations=false&activeOnly=true`, customFetch)
+	
 	if (constituentContact) {
 		let filterFound = constituentContact.filter(constituent => constituent["Type"]["Description"] == "Email" && constituent["Type"]["Category"]["Description"] == "General")
+		
 		if (filterFound.length > 0) {
 			if ((filterFound["Type"]["Category"]["Description"] == "Y") == form.consent) { //??????????????
 				contactPermissionsUpdate() //WRITE THIS DUMMY
 			}
 		} else if (!form.consent){
-			createPermissions(customFetch, constituentId)
+			console.log("Check")
+			let creation = await createPermissions(customFetch, constituentId)
+			return creation
 		}
 	}
 }
@@ -157,7 +177,7 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string)
 export async function orchestrator(customFetch: typeof fetch) {
 	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {"string": "string"}) ?? {SessionKey: "nope"}
 	sessionKey = sessionKeyGet["SessionKey"]
-	let constituentId = await getConstituentId(customFetch)
+	let constituentId = await updateContactPermissions(customFetch, "663145")
 	return constituentId
 	// updateContactPermissions(customFetch, constituentId.data.id)
 	// createSeatOrder(customFetch, constituentId.data.id)
