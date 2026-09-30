@@ -54,7 +54,7 @@ async function findBaseIndicator(customFetch: typeof fetch, performanceId: strin
     let filteredForPriceTypes = filteredForBaseIndicator[0]["PerformancePrices"].filter(performancePrices => performancePrices["Enabled"] == true)
     if (filteredForPriceTypes.length == 1) {
       return internalResponse(true, {
-          PriceTypeId: filteredForPriceTypes[0]["Id"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
+          PriceTypeId: filteredForPriceTypes[0]["PriceTypeId"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
           ZoneId: filteredForPriceTypes[0]["ZoneId"],
           TicketDesignId: filteredForBaseIndicator[0]["TicketDesignId"],
           PerformanceId: performanceId

@@ -24,7 +24,6 @@ export async function apiRequest<T>(
     const fetcher = customFetch || fetch;
 
     const response = await fetcher(env.TESSITURA_TEST_ENDPOINT + url, config);
-    console.log(response)
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }

@@ -15,10 +15,10 @@ const errorMessageText = {
 	moreThanOnePermission: ''
 }
 const globals = {
-	performanceId: 53612,
+	performanceId: 50833,
 	constituentId: '342957',
 	zoneId: 65,
-	priceTypeId: 3822379,
+	priceTypeId: 13,
 	ticketDesignId: "2128"
 }
 let sessionKey = ''
@@ -202,8 +202,8 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string,
 	if (!ticketGrab) {return internalResponse(false, {textContext: "tickets not created"})}
 
 	const checkoutRequest = {
-		Amount: "0.00m",
-		Authorize: true, // might not be needed?
+		Amount: '0.00',
+		Authorize: true,
 		AllowUnderPayment: true
 	}
 	let checkout = await apiRequest(`Web/Cart/${sessionKey}/Checkout`, customFetch, "POST", checkoutRequest)

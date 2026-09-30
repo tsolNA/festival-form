@@ -25,7 +25,7 @@ declare global {
         data?: any
     }
     interface PerformancePrices {
-        Id: string,
+        PriceTypeId: string,
         Enabled: boolean,
         ZoneId: string
     }
