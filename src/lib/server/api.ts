@@ -42,13 +42,13 @@ export function internalResponse(ok: boolean, data: object) {
   if (ok) {
     return {
       ok: true,
-      errorMessage: "",
+      textContext: "",
       data: data
     }
   } else {
     return {
-      errorMessage: data.errorMessage,
-      ok: false
+      ok: false,
+      textContext: data.textContext
     }
   }
 }
