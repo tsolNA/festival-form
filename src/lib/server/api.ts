@@ -1,5 +1,7 @@
 import { env } from "$env/dynamic/private";
 import { errorMessage } from "$lib/stores";
+import { appendFile } from 'node:fs/promises';
+import path from 'node:path';
 
 export async function apiRequest<T>(
   url: string, 
@@ -52,6 +54,20 @@ export function internalResponse(ok: boolean, data: object) {
   }
 }
 
-export function keepALog(message: string) {
-
+export async function keepALog(message: string) {
+  const filePath = path.resolve(process.cwd(), 'output.txt'); 
+  const today = new Date()
+  try {
+    await appendFile(filePath, today + " ----- " + message + '\n', 'utf8');
+    return true;
+  } catch (err) {
+    // Cast to Node's filesystem error to inspect properties if needed
+    const fsError = err as NodeJS.ErrnoException;
+    
+    // Log internally on the server console
+    console.error(`Failed to write to ${filePath}. Code: ${fsError.code}`);
+    
+    // Rethrow or handle gracefully depending on your architecture
+    throw new Error(`File append failed: ${fsError.message}`);
+  }
 }

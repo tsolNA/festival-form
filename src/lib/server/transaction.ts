@@ -21,7 +21,6 @@ const globals = {
 	priceTypeId: 13,
 	ticketDesignId: "2128"
 }
-let sessionKey = ''
 // API structure
 
 function priceEnumerator() {
@@ -31,7 +30,7 @@ function priceEnumerator() {
 	}
 	return repeatedStringArray.toString()
 }
-async function getConstituentId(customFetch: typeof fetch): Promise<TessPerformanceResponse> {
+async function getConstituentId(customFetch: typeof fetch, sessionKey: string): Promise<TessPerformanceResponse> {
 	let constituentSummary = await apiRequest<Record<string, Array<ConstituentSummary>>>(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}&atype=Web%20Login`, customFetch)
 	let constituentArray = constituentSummary !== null ?  constituentSummary["ConstituentSummaries"] : []
 	if (constituentArray.length !== 1) {
@@ -41,7 +40,7 @@ async function getConstituentId(customFetch: typeof fetch): Promise<TessPerforma
 		}
 		constituentArray = constituentAllEmails["ConstituentSummaries"].filter(constituent => constituent["Inactive"] == true)
 		if (constituentArray.length == 0) {
-			return createConstituent(customFetch)
+			return createConstituent(customFetch, sessionKey)
 		} else if (constituentArray.length > 1) {
 			return internalResponse(false, {textContext: "No constituent ID found"})
 		}
@@ -63,9 +62,7 @@ async function checkDNS(customFetch: typeof fetch, constituentId: string): Promi
 	}
 }
 
-async function createConstituent(customFetch: typeof fetch): Promise<TessPerformanceResponse> {
-	// Confirmed in docs that this creates a web login
-	 //not accurate
+async function createConstituent(customFetch: typeof fetch, sessionKey: string): Promise<TessPerformanceResponse> {
 	let constituent = {
 		ConstituentTypeId: 1,
 		LastName: form.lastName,
@@ -101,7 +98,6 @@ async function checkContactPermissions(customFetch: typeof fetch, constituentId:
 				return update
 			}
 		} else if (!form.consent){
-			console.log("Check")
 			let creation = await createPermissions(customFetch, constituentId)
 			return creation
 		}
@@ -160,7 +156,6 @@ async function contactPermissionsUpdate(customFetch: typeof fetch, constituentId
 			},
 		}
 	}
-	console.log(constituentInfo)
 	let updateRequest = await apiRequest(`CRM/ContactPermissions/${filteredId}`, customFetch, "PUT", constituentInfo)//<--------------
 	if (updateRequest) {
 		return internalResponse(true, {data:updateRequest})
@@ -197,7 +192,6 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string,
 		Unseated: false,
 		SpecialRequests: "ContiguousSeats=1&"
 	}
-	console.log(sessionKey)
 	let ticketGrab = await apiRequest(`Web/Cart/${sessionKey}/Tickets`, customFetch, "POST", request)
 	if (!ticketGrab) {return internalResponse(false, {textContext: "tickets not created"})}
 
@@ -224,16 +218,20 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string,
 
 
 	return internalResponse(true, {message: "seat complete"})
-	// let orderresult = Web.Session.Get(session_key)
 }
 
 export async function orchestrator(customFetch: typeof fetch) {
 	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {"string": "string"}) ?? {SessionKey: "nope"}
-	sessionKey = sessionKeyGet["SessionKey"]
-	// sessionKey = "c2018cae1c7944ba889708df1f20c29800000000000000000000000000000000"
-	console.log(sessionKey)
-	let constituentId = await createSeatOrder(customFetch, globals.constituentId, sessionKey)
-	return constituentId
+	let sessionKey = sessionKeyGet["SessionKey"]
+
+	let constituentId = await getConstituentId(customFetch, sessionKey)
+	if (!constituentId.ok) return constituentId
+
+	let permission = await checkContactPermissions(customFetch, constituentId.data.id)
+	if (!permission.ok) return permission
+
+	let seat = createSeatOrder(customFetch, constituentId.data.id, sessionKey)
+	return seat
 	// checkContactPermissions(customFetch, constituentId.data.id)
 	// createSeatOrder(customFetch, constituentId.data.id)
 	// return checkDNS(customFetch, "342957")

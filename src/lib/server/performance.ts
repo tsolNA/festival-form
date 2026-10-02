@@ -1,4 +1,4 @@
-import { apiRequest, internalResponse } from "./api";
+import { apiRequest, internalResponse, keepALog } from "./api";
 
 function isDateToday(date: string) {
   let today = new Date().setHours(0, 0, 0, 0)
@@ -12,6 +12,7 @@ async function filterMuseumAdmission(customFetch: typeof fetch): Promise<TessPer
     return internalResponse(false, {textContext: "Nothing in ReferenceData/Seasons"})
   }
   let today = new Date()
+  // let today = new Date(2026, 8, 24)
   // If testing without filter, set activeOnly to true in query param
   let filteredForTime = rawEvents.filter(singleEvent => new Date(singleEvent["StartDateTime"]) <= today && new Date(singleEvent["EndDateTime"]) >= today)
 
@@ -21,7 +22,8 @@ async function filterMuseumAdmission(customFetch: typeof fetch): Promise<TessPer
       return internalResponse(false, {textContext: "Nothing in TXN/ProductionSeasons"})
     }
     let filteredMuseumAdmission = productionSeasons.filter(productionSeason => productionSeason["Production"]["Description"] == "Museum Admission") //*Night Shift & Deaf cultural need their own check
-    
+    // let filteredMuseumAdmission = productionSeasons.filter(productionSeason => productionSeason["Production"]["Description"] == "Night/Shift") //*Night Shift & Deaf cultural need their own check
+    if (filteredMuseumAdmission.length !== 1) {return internalResponse(false, {textContext: "no performances found for today"})}
     return internalResponse(true, {id: filteredMuseumAdmission[0]["Id"]})
   } else {
     return internalResponse(false, {textContext: "too many fiscal years"})
@@ -53,6 +55,7 @@ async function findBaseIndicator(customFetch: typeof fetch, performanceId: strin
   if (filteredForBaseIndicator.length == 1) {
     let filteredForPriceTypes = filteredForBaseIndicator[0]["PerformancePrices"].filter(performancePrices => performancePrices["Enabled"] == true)
     if (filteredForPriceTypes.length == 1) {
+      console.log(filteredForPriceTypes[0])
       return internalResponse(true, {
           PriceTypeId: filteredForPriceTypes[0]["PriceTypeId"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
           ZoneId: filteredForPriceTypes[0]["ZoneId"],

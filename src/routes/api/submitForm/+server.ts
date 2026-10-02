@@ -5,11 +5,11 @@ const form = {
 	firstName: '',
 	lastName: '',
 	email: '',
-	ticketAmount: 0,
+	ticketAmount: 1,
 	consent: false
 }
 export const actions = {
-	submit: async ({ request }) => {
+	default: async ({ request }) => {
 		const data = await request.formData();
 
 		form.firstName = data.get('firstName')?.toString() ?? ''
