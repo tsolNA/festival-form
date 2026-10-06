@@ -12,41 +12,48 @@ async function filterMuseumAdmission(customFetch: typeof fetch): Promise<TessPer
     return internalResponse(false, {textContext: "Nothing in ReferenceData/Seasons"})
   }
   let today = new Date()
-  // let today = new Date(2026, 8, 24)
   // If testing without filter, set activeOnly to true in query param
   let filteredForTime = rawEvents.filter(singleEvent => new Date(singleEvent["StartDateTime"]) <= today && new Date(singleEvent["EndDateTime"]) >= today)
-
   if (filteredForTime.length == 1) {
+  // return filteredForTime[0]["Id"] , no need for the other stuff (pass Season Id)
     let productionSeasons = await apiRequest<Array<ProductionSeason>>(`TXN/ProductionSeasons?seasonIds=${filteredForTime[0]["Id"]}`, customFetch)
+    // Gets Specific Seasons (i.e. Museum Admission, Adult Programs)
+    // All performances
     if (!productionSeasons) {
       return internalResponse(false, {textContext: "Nothing in TXN/ProductionSeasons"})
     }
     let filteredMuseumAdmission = productionSeasons.filter(productionSeason => productionSeason["Production"]["Description"] == "Museum Admission") //*Night Shift & Deaf cultural need their own check
     // let filteredMuseumAdmission = productionSeasons.filter(productionSeason => productionSeason["Production"]["Description"] == "Night/Shift") //*Night Shift & Deaf cultural need their own check
     if (filteredMuseumAdmission.length !== 1) {return internalResponse(false, {textContext: "no performances found for today"})}
-    return internalResponse(true, {id: filteredMuseumAdmission[0]["Id"]})
+    return internalResponse(true, {id: filteredMuseumAdmission[0]["Id"], name: filteredMuseumAdmission[0]["Production"]["Description"]})
   } else {
     return internalResponse(false, {textContext: "too many fiscal years"})
   }
 }
 
 async function findAvailable(customFetch: typeof fetch, id: string): Promise<TessPerformanceResponse> {
+  // Pass in season id TXN/Performances?seasonsIds={seasonId}
+  // Filter for today (use line 17 ["Date"])
+  // Filter for ShortName (Museum Admission or Night/Shift)
   let performances = await apiRequest<Array<TessPerformance>>(`TXN/Performances?productionSeasonId=${id}`, customFetch)
   if (!performances) {
     return internalResponse(false, {textContext: "Nothing in TXN/Performances"})
   }
   let filteredForAvailable = performances.filter(performance => performance["AvailSaleIndicator"] == true && isDateToday(performance["Date"]))
+  // short Description filter here
+  // Pass in name (Description) to the return for later consumption
   if (filteredForAvailable.length == 1) {
-    return internalResponse(true, {id: filteredForAvailable[0]["Id"]})
+    return internalResponse(true, {id: filteredForAvailable[0]["Id"], date: filteredForAvailable[0]["Date"]})
   } else if (filteredForAvailable.length > 1) {
+    // if 2 give option for other event
     return internalResponse(false, {textContext: "too many avaiable to sell"})
   } else {
     return internalResponse(false, {textContext: "no performances available"})
   }
 }
 
-async function findBaseIndicator(customFetch: typeof fetch, performanceId: string): Promise<TessPerformanceResponse> {
-  let priceType = await apiRequest<Array<TessPriceType>>(`TXN/PerformancePriceTypes?performanceIds=${performanceId}`, customFetch) //
+async function findBaseIndicator(customFetch: typeof fetch, performanceId: string, name: string, date: string): Promise<TessPerformanceResponse> {
+  let priceType = await apiRequest<Array<TessPriceType>>(`TXN/PerformancePriceTypes?performanceIds=${performanceId}`, customFetch)
   if (!priceType) {
     return internalResponse(false, {textContext: "Nothing in TXN/PerformancePriceTypes"})
   }
@@ -55,18 +62,19 @@ async function findBaseIndicator(customFetch: typeof fetch, performanceId: strin
   if (filteredForBaseIndicator.length == 1) {
     let filteredForPriceTypes = filteredForBaseIndicator[0]["PerformancePrices"].filter(performancePrices => performancePrices["Enabled"] == true)
     if (filteredForPriceTypes.length == 1) {
-      console.log(filteredForPriceTypes[0])
       return internalResponse(true, {
-          PriceTypeId: filteredForPriceTypes[0]["PriceTypeId"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
+          PriceTypeId: filteredForBaseIndicator[0]["PriceTypeId"],// Set PriceTypeId, PerformancePrices.zoneid, and TicketDesignId to cart
           ZoneId: filteredForPriceTypes[0]["ZoneId"],
           TicketDesignId: filteredForBaseIndicator[0]["TicketDesignId"],
-          PerformanceId: performanceId
+          PerformanceId: performanceId,
+          Name: name,
+          Date: date
       })
     } else {
       return internalResponse(false, {textContext: "More than one zone in price type"})
     }
   } else {
-    return internalResponse(false, {textContext: "too many price types"})
+    return internalResponse(false, {textContext: "Too many Base Indicators"})
   }
 }
 
@@ -82,7 +90,7 @@ export async function loadPerformanceOptions(customFetch: typeof fetch): Promise
     return filteredForAvailable
   }
 
-  let filteredForBaseIndicator = await findBaseIndicator(customFetch, filteredForAvailable.data.id)
+  let filteredForBaseIndicator = await findBaseIndicator(customFetch, filteredForAvailable.data.id, filteredMuseumAdmission.data.name, filteredForAvailable.data.date)
   
   return filteredForBaseIndicator
 

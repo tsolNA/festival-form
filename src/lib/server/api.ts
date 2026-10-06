@@ -55,7 +55,7 @@ export function internalResponse(ok: boolean, data: object) {
 }
 
 export async function keepALog(message: string) {
-  const filePath = path.resolve(process.cwd(), 'output.txt'); 
+  const filePath = path.resolve('static', 'output.txt');
   const today = new Date()
   try {
     await appendFile(filePath, today + " ----- " + message + '\n', 'utf8');

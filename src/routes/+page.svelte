@@ -1,4 +1,5 @@
 <script lang='ts'>
+	import { enhance } from '$app/forms';
 	import { errorMessage } from '$lib/stores';
   import { onMount } from 'svelte';
   // declares the packaged event parameters
@@ -7,12 +8,13 @@
     perfNum: number;
   }
   let { data } = $props(); 
-  $inspect(data)
-  let firstName = $state('');
-  let lastName = $state('');
-  let email = $state('');
-  let ticketAmount = $state('');
-  let allEvents: {[key: string]: Event} = $state({})
+  let firstName = $state('Test');
+  let lastName = $state('McTesty');
+  let email = $state('tmctesty@nelson-atkins.org');
+  let ticketAmount = $state(2);
+  let tempUpdate = $state({})
+  let tempNightShift = $state({})
+  // consent is handled directly in the form
   let errors = $state({
     firstName: '',
     lastName: '',
@@ -21,37 +23,24 @@
   });
   let adminCheck = $state(false)
   let adminPass = $state('')
-  let selectedOption = $state({})
-
+  let selectedOption: any = $derived(data["data"]["data"])
   const nameRegex = /^[a-zA-ZÀ-ÿ' -]{2,}$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  async function loadOptions() {
-    try {
-      const res = await fetch("/api/getOptions");
-
-      if (!res.ok) {
-        throw new Error("Request failed");
-      }
-
-      const data = await res.json();
-      for (const event of data) {
-        let cleanedTitle = event["tes_perf_title"].replace(/^['"]|['"]$/g, '');
-        allEvents[cleanedTitle] = {
-          name: cleanedTitle,
-          perfNum: event['perf_no'],
-
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }
   // Sets the event object to local storage
   function setEvent(event: Event) {
     let string =  JSON.stringify(event)
     localStorage.setItem('event', string)
   }
+  $inspect(selectedOption)
   // Validations are based on the Tessitura requirements
+  async function reloadPerformanceOptions() {
+    let reload:TessPerformanceResponse = await fetch('/api/test', { method: 'POST' })
+    if (!reload) {
+      alert("no performances found")
+      return
+    }
+    tempUpdate = reload["data"]
+  }
   function validateFirstName() {
     if (!nameRegex.test(firstName)) {
       errors.firstName = "First names must be at least 2 characters using valid letters/symbols.";
@@ -116,7 +105,9 @@
     }
   })
   onMount(() => {
-		selectedOption = JSON.parse(localStorage.getItem('event')) || {}
+    if (localStorage.getItem('event')) {
+		  selectedOption = JSON.parse(localStorage.getItem('event')) ?? ''
+    }
     // console.log(JSON.stringify(localStorage.getItem('event')))
 	});
 </script>
@@ -125,24 +116,48 @@
     <div class="page-container">
       <input type="pin" bind:value={adminPass}>
     </div>
-  {:else if (Object.keys(selectedOption).length == 0)}
+  {:else if (selectedOption && Object.keys(selectedOption).length == 0)}
   <!-- Keep the select option, make user validate -->
     <div class="page-container">
-      <select name="festival" id="" bind:value={selectedOption}>
-        {#each Object.entries(allEvents) as [key, value]}
-          <option value={value}>{key}</option>
-        {/each}
-      </select>
-      <button id="refresh" onclick={loadOptions}>Refresh</button>
+      <button onclick={() => reloadPerformanceOptions()}>
+        Trigger Server
+      </button>
+      {#if Object.keys(tempUpdate).length === 0}
+        <div>
+          <button>
+            <p>{tempUpdate?.Name ?? 'No Performance Found'}</p>
+            <p>{tempUpdate?.Date ?? ""}</p>
+          </button>
+        </div>
+      {/if}
+      {#if Object.keys(tempNightShift).length === 0}
+        <div>
+          <button>
+            <p>{tempNightShift?.Name ?? 'No Performance Found'}</p>
+            <p>{tempNightShift?.Date ?? ""}</p>
+          </button>
+        </div>
+      {/if}
+      
     </div>
   {:else}
     <div class="page-container">
-      <button id="admin" onclick={() => adminCheck = true}>Admin</button>
-      <h1>{selectedOption.name}</h1>
-      <button onclick={() => fetch('/api/test', { method: 'POST' })}>
-        Trigger Server
-      </button>
-      <form method="POST">
+      <div id="admin">
+        <div>
+          <p>{selectedOption?.Name ?? 'No Performance Found'}</p>
+          <p>{selectedOption?.Date ?? ""}</p>
+        </div>
+        <button onclick={() => adminCheck = true}>Admin</button>
+      </div>
+      <form method="POST"
+        use:enhance={({ formData }) => {
+          // Append extra client-side data to formData
+          formData.append('performanceId', selectedOption['PerformanceId']);
+          formData.append('zoneId', selectedOption['ZoneId']);
+          formData.append('priceTypeId', selectedOption['PriceTypeId']);
+          formData.append('ticketDesignId', selectedOption['TicketDesignId']);
+        }}
+      >
         <label>
           First Name:
           <input
@@ -238,18 +253,20 @@
     from {opacity: 0}
     to {opacity: 1}
   }
-  #refresh {
-    width: 200px;
-    position: absolute;
-    bottom: 50px;
-  }
   #admin {
     position: absolute;
     top: 20px;
     right: 20px;
-  }
-  h1 {
-    margin: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: end;
+    align-items: center;
+    gap: 15px;
+    & p {
+      font-size: .7em;
+      margin: 0;
+      height: unset;
+    }
   }
   input {
       height: 40px;

@@ -1,7 +1,7 @@
-import { apiRequest, internalResponse } from "./api";
+import { apiRequest, internalResponse, keepALog } from "./api";
 
 // Address backticks and quotes for all entries
-const form = {
+let form = {
 	firstName: 'Test',
 	lastName: 'McTesty',
 	email: 'tmctesty@nelson-atkins.org',
@@ -14,9 +14,8 @@ const errorMessageText = {
 	creationAccountIdMissing: '',
 	moreThanOnePermission: ''
 }
-const globals = {
+let globals = {
 	performanceId: 50833,
-	constituentId: '342957',
 	zoneId: 65,
 	priceTypeId: 13,
 	ticketDesignId: "2128"
@@ -47,7 +46,7 @@ async function getConstituentId(customFetch: typeof fetch, sessionKey: string): 
 	}
 	return checkDNS(customFetch, constituentArray[0].Id)
 }
-
+// Confirm that DNS results in failure
 async function checkDNS(customFetch: typeof fetch, constituentId: string): Promise<TessPerformanceResponse> {
 	const constituents = await apiRequest<Array<Constituent>>(`CRM/Constituencies?constituentId=${constituentId}`, customFetch, "GET") //342957 DNS
 	if (!constituents) {
@@ -57,6 +56,7 @@ async function checkDNS(customFetch: typeof fetch, constituentId: string): Promi
 		if (dnsFilter.length > 0) {
 			return internalResponse(false, {textContext: "Do not sell"})
 		} else {
+			console.log("ID checked for DNS")
 			return internalResponse(true, {id: constituentId})
 		}
 	}
@@ -81,7 +81,8 @@ async function createConstituent(customFetch: typeof fetch, sessionKey: string):
 	if (!constituentCall) {
 		return internalResponse(false, {textContext: "Account Creation Failure"})
 	}
-	return internalResponse(true, constituentCall["LoginInfo"]["ConstituentId"])
+	console.log("constituent created")
+	return internalResponse(true, {id: constituentCall["LoginInfo"]["ConstituentId"]})
 }
 
 async function checkContactPermissions(customFetch: typeof fetch, constituentId: string) {
@@ -101,9 +102,12 @@ async function checkContactPermissions(customFetch: typeof fetch, constituentId:
 			let creation = await createPermissions(customFetch, constituentId)
 			return creation
 		}
-		return internalResponse(false, {textContext: "no action needed"})
+		// Logic Check -- if no action needed, don't fail
+		console.log("Permissions don't need adjusting")
+		return internalResponse(true, {textContext: "no action needed"})
 	}
-	return internalResponse(false, {textContext: "Failed to find constituent contact"})
+	keepALog(`Failed to find constituent permissions contactId: ${constituentId} -- ${form.email}`)
+	return internalResponse(true, {textContext: "Failed to find constituent contact"})
 }
 
 async function createPermissions(customFetch: typeof fetch, constituentId: string): Promise<TessPerformanceResponse> {
@@ -133,8 +137,10 @@ async function createPermissions(customFetch: typeof fetch, constituentId: strin
 		if (!permissions) {
 			return internalResponse(false, {textContext: "Permissions not created"})
 		}
+		console.log("Permissions created")
 		return internalResponse(true, {data: permissions})
 	} else {
+		// keepalog() keep constituent ID and consent choice
 		return internalResponse(false, {textContext: errorMessageText.moreThanOnePermission})
 	}
 }
@@ -158,8 +164,10 @@ async function contactPermissionsUpdate(customFetch: typeof fetch, constituentId
 	}
 	let updateRequest = await apiRequest(`CRM/ContactPermissions/${filteredId}`, customFetch, "PUT", constituentInfo)//<--------------
 	if (updateRequest) {
+		console.log("Permissions updated")
 		return internalResponse(true, {data:updateRequest})
 	} else {
+		// keepalog() keep constituent ID and consent choice
 		return internalResponse(false, {textContext: "Could not update permissions"})
 	}
 }
@@ -172,10 +180,9 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string,
 	if (!cart) { return internalResponse(false, {textContext: "cart has no wheels"}) }
 
 	let allConstituents = await apiRequest<Array<EmailResponse>>(`CRM/ElectronicAddresses?constituentIds=${constituentId}&includeAffiliations=false&primaryOnly=false`, customFetch)
-	if (!allConstituents) { return internalResponse(false, {textContext: "no constituents email found"})}
+	if (!allConstituents) { return internalResponse(false, {textContext: `no constituents email found ${constituentId}`})}
 
 	let filteredConstituents = allConstituents.filter(constituent => constituent["Inactive"] == true)
-	// Sort with primary at top
 	if (filteredConstituents.length > 0) {
 		cart['ElectronicAddressId'] = filteredConstituents[0]["ElectronicAddressType"]["Id"]
 	}
@@ -208,19 +215,54 @@ async function createSeatOrder(customFetch: typeof fetch, constituentId: string,
 
 	const printOrderRequest = {
 		NewTicketNoForReprints: true,
-		OrderId: orderResult['Id'],
+		OrderId: orderResult['OrderId'],
 		TicketDesignId: globals.ticketDesignId,
 		PrinterType: "Z",
 		ReprintTickets: true
 	}
-	let print = apiRequest(`Web/Cart/${sessionKey}/Print/PrintStrings`, customFetch, "POST", printOrderRequest)
+	let print = await apiRequest(`Web/Cart/${sessionKey}/Print/PrintStrings`, customFetch, "POST", printOrderRequest)
 	if (!print) {return internalResponse(false, {textContext: "printing failure"})}
 
 
-	return internalResponse(true, {message: "seat complete"})
+	let seating = seatTickets(customFetch, constituentId, orderResult['OrderId'])
+	return seating
 }
 
-export async function orchestrator(customFetch: typeof fetch) {
+async function seatTickets(customFetch: typeof fetch, constituentId: string, orderId: string) {
+	let finished = false
+	let count = 0
+	let subline: Array<Subline> = []
+	while (count < 10 && !finished) {
+		let tempSubline = await apiRequest<Array<Subline>>(`TXN/SubLineItems?constituentId=${constituentId}&orderId=${orderId}`, customFetch)
+		if (!tempSubline) continue
+		let ticketCheck = tempSubline?.every((ticket => ticket["TicketNumber"] !== 0 || ticket["TicketNumber"] !== null)) //
+		// 
+		if (ticketCheck) {
+			subline = tempSubline
+			finished = true
+		} else {
+			continue
+		}
+	}
+	if (subline.length == 0 || !finished) { return internalResponse(false, {textContext: "Ticket Sublines not produced"})}
+
+	subline.forEach(ticket => {
+		let ratRequest = {
+			TicketNo: ticket["TicketNumber"],
+			OverrideDoorsOpen: true,
+			EventId: ticket["Performance"]["Id"]
+		}
+		let recordTicket = apiRequest(`AccessControl/RecordAttendance/Ticket`, customFetch, "POST", ratRequest)
+		if (!recordTicket) {keepALog(`Could not mark attended for ${constituentId} --> ${ratRequest.TicketNo} -- ${ratRequest.EventId}`)}
+	});
+	console.log("Seats seated")
+	return internalResponse(true, {data: 'success'})
+}
+
+
+export async function orchestrator(customFetch: typeof fetch, formGlobals: any, formData: any) {
+	globals = formGlobals
+	form = formData
 	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {"string": "string"}) ?? {SessionKey: "nope"}
 	let sessionKey = sessionKeyGet["SessionKey"]
 
@@ -230,7 +272,10 @@ export async function orchestrator(customFetch: typeof fetch) {
 	let permission = await checkContactPermissions(customFetch, constituentId.data.id)
 	if (!permission.ok) return permission
 
-	let seat = createSeatOrder(customFetch, constituentId.data.id, sessionKey)
+	let seat = await createSeatOrder(customFetch, constituentId.data.id, sessionKey)
+	if (seat.ok) {
+
+	}
 	return seat
 	// checkContactPermissions(customFetch, constituentId.data.id)
 	// createSeatOrder(customFetch, constituentId.data.id)

@@ -25,7 +25,7 @@ declare global {
         data?: any
     }
     interface PerformancePrices {
-        PriceTypeId: string,
+        PerformancePriceTypeId: string,
         Enabled: boolean,
         ZoneId: string
     }
@@ -92,7 +92,13 @@ declare global {
         Inactive: boolean
     }
     interface Order {
-        Id: string
+        OrderId: string
+    }
+    interface Subline {
+        TicketNumber: number
+        Performance: {
+            Id: string
+        }
     }
 }
 

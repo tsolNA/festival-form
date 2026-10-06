@@ -8,7 +8,7 @@ export const POST: RequestHandler = async ({ fetch }) => {
 
     try {
         // Run orchestrator and trace its lifecycle
-        const performanceData = await orchestrator(fetch);
+        const performanceData = await loadPerformanceOptions(fetch);
         // const performanceData = await loadPerformanceOptions(fetch)
         
         console.log("🟢 2. Orchestrator completed without throwing. Data:", performanceData);
