@@ -32,6 +32,7 @@ function priceEnumerator() {
 async function getConstituentId(customFetch: typeof fetch, sessionKey: string): Promise<TessPerformanceResponse> {
 	let constituentSummary = await apiRequest<Record<string, Array<ConstituentSummary>>>(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}&atype=Web%20Login`, customFetch)
 	let constituentArray = constituentSummary !== null ?  constituentSummary["ConstituentSummaries"] : []
+
 	if (constituentArray.length !== 1) {
 		const constituentAllEmails = await apiRequest<Record<string, Array<ConstituentSummary>>>(`CRM/Constituents/Search?type=advanced&atype=Email&op=Like&value=%${form.email}`, customFetch)
 		if (!constituentAllEmails) {
@@ -41,9 +42,13 @@ async function getConstituentId(customFetch: typeof fetch, sessionKey: string): 
 		if (constituentArray.length == 0) {
 			return createConstituent(customFetch, sessionKey)
 		} else if (constituentArray.length > 1) {
+			console.log("here")
+			console.log(constituentArray)
 			return internalResponse(false, {textContext: "No constituent ID found"})
 		}
+
 	}
+
 	return checkDNS(customFetch, constituentArray[0].Id)
 }
 // Confirm that DNS results in failure
@@ -54,7 +59,7 @@ async function checkDNS(customFetch: typeof fetch, constituentId: string): Promi
 	} else {
 		let dnsFilter = constituents.filter(constituent => constituent["ConstituencyType"]["ShortDescription"] == "DNS")
 		if (dnsFilter.length > 0) {
-			return internalResponse(false, {textContext: "Do not sell"})
+			return internalResponse(false, {textContext: "DNS issue"})
 		} else {
 			console.log("ID checked for DNS")
 			return internalResponse(true, {id: constituentId})
@@ -236,7 +241,6 @@ async function seatTickets(customFetch: typeof fetch, constituentId: string, ord
 		let tempSubline = await apiRequest<Array<Subline>>(`TXN/SubLineItems?constituentId=${constituentId}&orderId=${orderId}`, customFetch)
 		if (!tempSubline) continue
 		let ticketCheck = tempSubline?.every((ticket => ticket["TicketNumber"] !== 0 || ticket["TicketNumber"] !== null)) //
-		// 
 		if (ticketCheck) {
 			subline = tempSubline
 			finished = true
@@ -265,7 +269,6 @@ export async function orchestrator(customFetch: typeof fetch, formGlobals: any, 
 	form = formData
 	let sessionKeyGet = await apiRequest<Record<string, string>>(`Web/Session`, customFetch, "POST", {"string": "string"}) ?? {SessionKey: "nope"}
 	let sessionKey = sessionKeyGet["SessionKey"]
-
 	let constituentId = await getConstituentId(customFetch, sessionKey)
 	if (!constituentId.ok) return constituentId
 
@@ -273,9 +276,7 @@ export async function orchestrator(customFetch: typeof fetch, formGlobals: any, 
 	if (!permission.ok) return permission
 
 	let seat = await createSeatOrder(customFetch, constituentId.data.id, sessionKey)
-	if (seat.ok) {
-
-	}
+	// return internalResponse(false, {textContext: "testing failure"})
 	return seat
 	// checkContactPermissions(customFetch, constituentId.data.id)
 	// createSeatOrder(customFetch, constituentId.data.id)

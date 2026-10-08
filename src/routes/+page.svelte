@@ -1,19 +1,19 @@
 <script lang='ts'>
-	import { enhance } from '$app/forms';
-	import { errorMessage } from '$lib/stores';
-  import { onMount } from 'svelte';
+	import { applyAction, enhance } from '$app/forms';
+	import { fade, fly } from 'svelte/transition';
   // declares the packaged event parameters
   interface Event {
     name: string;
     perfNum: number;
+    Date: string
   }
   let { data } = $props(); 
   let firstName = $state('Test');
   let lastName = $state('McTesty');
   let email = $state('tmctesty@nelson-atkins.org');
-  let ticketAmount = $state(2);
-  let tempUpdate = $state({})
-  let tempNightShift = $state({})
+  let ticketAmount = $state(1);
+  let formLoading = $state(false)
+  let newForm = $state(false)
   // consent is handled directly in the form
   let errors = $state({
     firstName: '',
@@ -21,25 +21,28 @@
     email: '',
     ticketAmount: ''
   });
-  let adminCheck = $state(false)
+  let formResponse = $state({
+    formSubmitted: false,
+    ok: true,
+    textContext: ""
+  })
   let adminPass = $state('')
   let selectedOption: any = $derived(data["data"]["data"])
-  const nameRegex = /^[a-zA-ZÀ-ÿ' -]{2,}$/;
+  const nameRegex = /^[a-zA-ZÀ-ÿ'` -]{2,}$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   // Sets the event object to local storage
-  function setEvent(event: Event) {
-    let string =  JSON.stringify(event)
-    localStorage.setItem('event', string)
+  function triggerAdmin() {
+    adminPass = ''
+    newForm = false
+    setTimeout(() => {
+      formResponse.ok = true
+    }, 1000);
   }
-  $inspect(selectedOption)
-  // Validations are based on the Tessitura requirements
-  async function reloadPerformanceOptions() {
-    let reload:TessPerformanceResponse = await fetch('/api/test', { method: 'POST' })
-    if (!reload) {
-      alert("no performances found")
-      return
-    }
-    tempUpdate = reload["data"]
+  function resetForm() {
+    firstName = ''
+    lastName = ''
+    email = ''
+    ticketAmount = 1
   }
   function validateFirstName() {
     if (!nameRegex.test(firstName)) {
@@ -82,73 +85,27 @@
     errors.firstName !== '' ||
     errors.lastName !== '' ||
     errors.email !== '' ||
-    errors.ticketAmount !== ''
+    errors.ticketAmount !== '' || 
+    !data.data.ok ||
+    !formResponse.ok
   );
-
   $effect(() =>  {
     if (adminPass == '1933') {
       // call to server.ts
-      selectedOption = {}
-      adminPass = ''
-      adminCheck = false
-    }
-    
-  })
-  $effect(() => {
-    if (Object.keys(selectedOption).length !== 0) {
-      setEvent(selectedOption)
+      triggerAdmin()
     }
   })
-  $effect(() => {
-    if ($errorMessage !== '') {
-      alert($errorMessage)
-    }
-  })
-  onMount(() => {
-    if (localStorage.getItem('event')) {
-		  selectedOption = JSON.parse(localStorage.getItem('event')) ?? ''
-    }
-    // console.log(JSON.stringify(localStorage.getItem('event')))
-	});
 </script>
 <div class="fadein page-container">
-  {#if (adminCheck)}
     <div class="page-container">
-      <input type="pin" bind:value={adminPass}>
-    </div>
-  {:else if (selectedOption && Object.keys(selectedOption).length == 0)}
-  <!-- Keep the select option, make user validate -->
-    <div class="page-container">
-      <button onclick={() => reloadPerformanceOptions()}>
-        Trigger Server
-      </button>
-      {#if Object.keys(tempUpdate).length === 0}
-        <div>
-          <button>
-            <p>{tempUpdate?.Name ?? 'No Performance Found'}</p>
-            <p>{tempUpdate?.Date ?? ""}</p>
-          </button>
-        </div>
-      {/if}
-      {#if Object.keys(tempNightShift).length === 0}
-        <div>
-          <button>
-            <p>{tempNightShift?.Name ?? 'No Performance Found'}</p>
-            <p>{tempNightShift?.Date ?? ""}</p>
-          </button>
-        </div>
-      {/if}
-      
-    </div>
-  {:else}
-    <div class="page-container">
+    <div></div>
       <div id="admin">
         <div>
-          <p>{selectedOption?.Name ?? 'No Performance Found'}</p>
+          <p>{selectedOption?.Name ?? "No performance found"}</p>
           <p>{selectedOption?.Date ?? ""}</p>
         </div>
-        <button onclick={() => adminCheck = true}>Admin</button>
       </div>
+      
       <form method="POST"
         use:enhance={({ formData }) => {
           // Append extra client-side data to formData
@@ -156,6 +113,21 @@
           formData.append('zoneId', selectedOption['ZoneId']);
           formData.append('priceTypeId', selectedOption['PriceTypeId']);
           formData.append('ticketDesignId', selectedOption['TicketDesignId']);
+          formLoading = true
+          newForm = true
+
+          return async ({ result, update }) => {
+            formResponse = result.data
+            formLoading = false
+            
+            await applyAction(result); // This keeps it client-side without reloads
+            if (result.data.ok) {
+              console.log("here")
+              setTimeout(() => {
+                newForm = false
+              }, 1500);
+            }
+          };
         }}
       >
         <label>
@@ -189,11 +161,11 @@
             }}
             required
           />
-            <p class="error">
-                {#if errors.lastName}
-                    {errors.lastName}
-                {/if}
-            </p>
+          <p class="error">
+              {#if errors.lastName}
+                  {errors.lastName}
+              {/if}
+          </p>
           
         </label>
 
@@ -237,7 +209,7 @@
           
         </label>
         <div style="display: flex; justify-content: center; align-items: center; gap: 20px">
-            <input style="height: 50px; width: 50px;" id="consent" checked type="checkbox">
+            <input checked style="height: 50px; width: 50px;" id="consent" name="consent" type="checkbox">
             <label for="consent" style="margin-bottom: 0;"> Would you like to receive emails from the Nelson-Atkins Museum of Art (we never share or sell this data)?</label>
         </div>
         <br />
@@ -245,10 +217,67 @@
           Submit
         </button>
       </form>
+      <div class="api-info">
+        {#if (formLoading)}
+          <div class="api-sub">
+            <div in:fade out:fade={{duration: 100}} class="loader"></div>
+          </div>
+        {:else if (newForm)}
+          <!-- {#if (hasErrors || adminCheck)} -->
+          <div class="api-sub result" transition:fade={{delay: 200}}>
+            {#if (!hasErrors)}
+              <svg class="checkmark" viewBox="0 0 100 100">
+                <path d="M15 52 L40 77 L85 25" />
+              </svg>
+            {:else} 
+              <svg class="xmark" viewBox="0 0 100 100">
+                <path d="M20 20 L80 80 M80 20 L20 80" />
+              </svg>
+            {/if}
+            <p>{data.data?.textContext}</p>
+            <p>{formResponse?.textContext}</p>
+            {#if (!formResponse.ok)}
+              <input in:fade type="pin" bind:value={adminPass}>
+            {/if}
+          </div>
+          
+        {/if}
+        
+      </div>
     </div>
-  {/if}
 </div>
 <style>
+
+  svg {
+    width: 100px;
+    height: 100px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 30;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .checkmark {
+    color: green;
+  }
+  .xmark {
+    color: red;
+  }
+  .loader {
+    border: 16px solid #f3f3f3; /* Light grey */
+    border-top: 16px solid #3498db; /* Blue */
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 1s linear infinite;
+    flex-shrink: 0;
+    flex: unset;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
   @keyframes fadein {
     from {opacity: 0}
     to {opacity: 1}
@@ -262,15 +291,32 @@
     justify-content: end;
     align-items: center;
     gap: 15px;
+    
     & p {
       font-size: .7em;
       margin: 0;
       height: unset;
     }
   }
+  .api-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  .result {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+  }
+  .api-sub {
+    position: absolute;
+  }
   input {
-      height: 40px;
-      font-size: 24px;
+    height: 40px;
+    font-size: 24px;
   }
   #submit-button {
       margin: auto;
@@ -288,9 +334,12 @@
     width: 100vw;
     margin: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     justify-content: center;
     align-items: center;
+    & div {
+      flex: 1;
+    }
   }
 
   form label {

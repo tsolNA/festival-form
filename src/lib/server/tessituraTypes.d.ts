@@ -15,9 +15,11 @@ declare global {
         }
     }
     interface TessPerformance {
+        ShortName: string,
         Id: string,
         AvailSaleIndicator: boolean,
-        Date: string
+        Date: string,
+        Description: string
     }
     interface TessPerformanceResponse {
         ok: boolean,

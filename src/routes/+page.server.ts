@@ -26,14 +26,13 @@ export const actions = {
 		form.lastName = data.get('lastName')?.toString() ?? ''
 		form.email = data.get('email')?.toString() ?? ''
 		form.ticketAmount = Math.trunc(Number(data.get('ticketAmount'))) ?? 1
-		form.consent = data.has('consent');
+		form.consent = data.get('consent') == 'on';
 
 
 		const errors: Record<string, string> = {};
-
 		// ---- Helpers ----
 		const isSafeString = (str: string): boolean => {
-			return /^[a-zA-Z\s'-]+$/.test(str);
+			return /^[a-zA-Z\s'`-]+$/.test(str);
 		};
 
 		const isEmailValid = (email: string): boolean => {
@@ -64,6 +63,7 @@ export const actions = {
 			errors.ticketAmount =
 				'Ticket amount must be an integer between 1 and 10.';
 		}
+		console.log(form)
 		const admissionData = await orchestrator(fetch, {
 			performanceId: data.get('performanceId')?.toString(),
 			zoneId: data.get('zoneId')?.toString(),
@@ -71,15 +71,17 @@ export const actions = {
 			ticketDesignId: data.get('ticketDesignId')?.toString()
 		}, 
         form);
-		console.log(admissionData)
 		// ---- Return Errors ----
 		if (Object.keys(errors).length > 0) {
-			console.log(Object.keys(errors))
+			Object.keys(errors).forEach(element => {
+                console.log(`${element}: ${errors.element}`)
+            });
 			return fail(400, {
 				success: false,
 				errors
 			});
 		}
+        console.log(admissionData)
 		// ---- Success ----
 		return admissionData
 	}

@@ -1,8 +1,9 @@
 import { apiRequest, internalResponse, keepALog } from "./api";
-
+let count = 0
 function isDateToday(date: string) {
   let today = new Date().setHours(0, 0, 0, 0)
   let dateConverted = new Date(date).setHours(0, 0, 0, 0)
+    
   return today == dateConverted
 }
 
@@ -15,36 +16,36 @@ async function filterMuseumAdmission(customFetch: typeof fetch): Promise<TessPer
   // If testing without filter, set activeOnly to true in query param
   let filteredForTime = rawEvents.filter(singleEvent => new Date(singleEvent["StartDateTime"]) <= today && new Date(singleEvent["EndDateTime"]) >= today)
   if (filteredForTime.length == 1) {
-  // return filteredForTime[0]["Id"] , no need for the other stuff (pass Season Id)
-    let productionSeasons = await apiRequest<Array<ProductionSeason>>(`TXN/ProductionSeasons?seasonIds=${filteredForTime[0]["Id"]}`, customFetch)
-    // Gets Specific Seasons (i.e. Museum Admission, Adult Programs)
-    // All performances
-    if (!productionSeasons) {
-      return internalResponse(false, {textContext: "Nothing in TXN/ProductionSeasons"})
-    }
-    let filteredMuseumAdmission = productionSeasons.filter(productionSeason => productionSeason["Production"]["Description"] == "Museum Admission") //*Night Shift & Deaf cultural need their own check
-    // let filteredMuseumAdmission = productionSeasons.filter(productionSeason => productionSeason["Production"]["Description"] == "Night/Shift") //*Night Shift & Deaf cultural need their own check
-    if (filteredMuseumAdmission.length !== 1) {return internalResponse(false, {textContext: "no performances found for today"})}
-    return internalResponse(true, {id: filteredMuseumAdmission[0]["Id"], name: filteredMuseumAdmission[0]["Production"]["Description"]})
+    console.log("Passing seasonId")
+    return internalResponse(true, {id: filteredForTime[0]["Id"]}) //no need for the other stuff (pass Season Id)
   } else {
     return internalResponse(false, {textContext: "too many fiscal years"})
   }
 }
 
 async function findAvailable(customFetch: typeof fetch, id: string): Promise<TessPerformanceResponse> {
-  // Pass in season id TXN/Performances?seasonsIds={seasonId}
-  // Filter for today (use line 17 ["Date"])
-  // Filter for ShortName (Museum Admission or Night/Shift)
-  let performances = await apiRequest<Array<TessPerformance>>(`TXN/Performances?productionSeasonId=${id}`, customFetch)
+  
+  let performances = await apiRequest<Array<TessPerformance>>(`TXN/Performances?seasonIds=${id}`, customFetch)
   if (!performances) {
     return internalResponse(false, {textContext: "Nothing in TXN/Performances"})
   }
-  let filteredForAvailable = performances.filter(performance => performance["AvailSaleIndicator"] == true && isDateToday(performance["Date"]))
-  // short Description filter here
-  // Pass in name (Description) to the return for later consumption
-  if (filteredForAvailable.length == 1) {
-    return internalResponse(true, {id: filteredForAvailable[0]["Id"], date: filteredForAvailable[0]["Date"]})
-  } else if (filteredForAvailable.length > 1) {
+  let filteredForAvailable = performances.filter(performance => 
+    performance["AvailSaleIndicator"] == true 
+    && isDateToday(performance["Date"])) 
+
+  // Add other events here
+  let filteredForEvent = filteredForAvailable.filter(performance => 
+    performance["ShortName"] == "Night/Shift"
+  )
+
+  // Defaults to museum admission
+  if (filteredForEvent.length == 0) {
+    filteredForEvent = filteredForAvailable.filter(performance => performance["ShortName"] == "Museum Admission")
+  }
+  if (filteredForEvent.length == 1) {
+    console.log("Name, date, and Id found")
+    return internalResponse(true, {id: filteredForEvent[0]["Id"], date: filteredForEvent[0]["Date"], name: filteredForEvent[0]["Description"]})
+  } else if (filteredForEvent.length > 1) {
     // if 2 give option for other event
     return internalResponse(false, {textContext: "too many avaiable to sell"})
   } else {
@@ -90,9 +91,9 @@ export async function loadPerformanceOptions(customFetch: typeof fetch): Promise
     return filteredForAvailable
   }
 
-  let filteredForBaseIndicator = await findBaseIndicator(customFetch, filteredForAvailable.data.id, filteredMuseumAdmission.data.name, filteredForAvailable.data.date)
-  
+  let filteredForBaseIndicator = await findBaseIndicator(customFetch, filteredForAvailable.data.id, filteredForAvailable.data.name, filteredForAvailable.data.date)
+  console.log(filteredForBaseIndicator)
+  // return internalResponse(false, {textContext: "testing"}) //Test performance failures here
   return filteredForBaseIndicator
 
-  
 }
