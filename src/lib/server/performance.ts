@@ -1,5 +1,5 @@
-import { apiRequest, internalResponse, keepALog } from "./api";
-let count = 0
+import { apiRequest, internalResponse } from "./api";
+
 function isDateToday(date: string) {
   let today = new Date().setHours(0, 0, 0, 0)
   let dateConverted = new Date(date).setHours(0, 0, 0, 0)

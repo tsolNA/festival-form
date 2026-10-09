@@ -1,6 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { orchestrator } from '$lib/server/transaction';
 import { loadPerformanceOptions } from '$lib/server/performance';
 
 export const POST: RequestHandler = async ({ fetch }) => {

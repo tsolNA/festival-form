@@ -1,5 +1,4 @@
 import { env } from "$env/dynamic/private";
-import { errorMessage } from "$lib/stores";
 import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -33,13 +32,12 @@ export async function apiRequest<T>(
     return data;
   } catch (error) {
     console.error(`API Request failed for ${env.TESSITURA_TEST_ENDPOINT + url}:`, error );
-    errorMessage.set(String(error));
     
     return null;
   }
 }
 
-export function internalResponse(ok: boolean, data: object) {
+export function internalResponse(ok: boolean, data: any) {
   if (ok) {
     return {
       ok: true,
@@ -47,6 +45,7 @@ export function internalResponse(ok: boolean, data: object) {
       data: data
     }
   } else {
+    keepALog(data.textContext)
     return {
       ok: false,
       textContext: data.textContext
@@ -61,13 +60,10 @@ export async function keepALog(message: string) {
     await appendFile(filePath, today + " ----- " + message + '\n', 'utf8');
     return true;
   } catch (err) {
-    // Cast to Node's filesystem error to inspect properties if needed
     const fsError = err as NodeJS.ErrnoException;
     
-    // Log internally on the server console
     console.error(`Failed to write to ${filePath}. Code: ${fsError.code}`);
     
-    // Rethrow or handle gracefully depending on your architecture
     throw new Error(`File append failed: ${fsError.message}`);
   }
 }

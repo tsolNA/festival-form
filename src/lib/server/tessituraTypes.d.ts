@@ -1,6 +1,13 @@
 
 
 declare global {
+    interface Form {
+        firstName: string,
+        lastName: string, 
+        email: string, 
+        ticketAmount: number,
+        consent: boolean
+    }
     // performance
     type TessBoolean = "Y" | "N"
     interface TessSeason {

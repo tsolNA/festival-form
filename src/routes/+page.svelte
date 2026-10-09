@@ -2,18 +2,15 @@
 	import { applyAction, enhance } from '$app/forms';
 	import { fade, fly } from 'svelte/transition';
   // declares the packaged event parameters
-  interface Event {
-    name: string;
-    perfNum: number;
-    Date: string
-  }
   let { data } = $props(); 
   let firstName = $state('Test');
   let lastName = $state('McTesty');
   let email = $state('tmctesty@nelson-atkins.org');
   let ticketAmount = $state(1);
+  let consent = $state(true)
   let formLoading = $state(false)
   let newForm = $state(false)
+  let direction = 1
   // consent is handled directly in the form
   let errors = $state({
     firstName: '',
@@ -43,6 +40,16 @@
     lastName = ''
     email = ''
     ticketAmount = 1
+    consent = true
+  }
+  function adjustTickets(operation: string) {
+    if (operation == "-" && ticketAmount > 1) {
+      direction = -1
+      ticketAmount -= 1
+    } else if (operation == "+" && ticketAmount < 10) {
+      direction = 1
+      ticketAmount += 1
+    }
   }
   function validateFirstName() {
     if (!nameRegex.test(firstName)) {
@@ -103,6 +110,7 @@
         <div>
           <p>{selectedOption?.Name ?? "No performance found"}</p>
           <p>{selectedOption?.Date ?? ""}</p>
+          <button onclick={() => resetForm()}>Clear Form</button>
         </div>
       </div>
       
@@ -116,13 +124,14 @@
           formLoading = true
           newForm = true
 
-          return async ({ result, update }) => {
+          return async ({ result }) => {
             formResponse = result.data
             formLoading = false
             
             await applyAction(result); // This keeps it client-side without reloads
+            // await update();
             if (result.data.ok) {
-              console.log("here")
+              resetForm()
               setTimeout(() => {
                 newForm = false
               }, 1500);
@@ -189,27 +198,38 @@
           
         </label>
 
-        <label>
+        <div>
           Ticket Amount:
-          <input
-            name="ticketAmount"
-            type="number"
-            bind:value={ticketAmount}
-            onblur={validateTicketAmount} //only validate on blur or if an error is already showing
-            oninput={() => {
-                if (errors.ticketAmount) validateTicketAmount()
-            }}
-            required
-          />
+          <div class="ticket-section">
+            <button type="button" onclick={() => adjustTickets('-')}>-</button>
+            {#key ticketAmount}
+            <input
+              in:fly={{ y: direction * 50, duration: 200 }} 
+			        out:fly={{ y: direction * -50, duration: 200 }}
+              class="ticket-input"
+              name="ticketAmount"
+              type="number"
+              bind:value={ticketAmount}
+              onblur={validateTicketAmount} //only validate on blur or if an error is already showing
+              oninput={() => {
+                  if (errors.ticketAmount) validateTicketAmount()
+              }}
+              required
+              readonly
+            />
+            {/key}
+            <button type="button" onclick={() => adjustTickets("+")}>+</button>
+          </div>
+          
             <p class="error">
                 {#if errors.ticketAmount}
                     {errors.ticketAmount}
                 {/if}
             </p>
           
-        </label>
+        </div>
         <div style="display: flex; justify-content: center; align-items: center; gap: 20px">
-            <input checked style="height: 50px; width: 50px;" id="consent" name="consent" type="checkbox">
+            <input bind:checked={consent} style="height: 50px; width: 50px;" id="consent" name="consent" type="checkbox">
             <label for="consent" style="margin-bottom: 0;"> Would you like to receive emails from the Nelson-Atkins Museum of Art (we never share or sell this data)?</label>
         </div>
         <br />
@@ -237,7 +257,7 @@
             <p>{data.data?.textContext}</p>
             <p>{formResponse?.textContext}</p>
             {#if (!formResponse.ok)}
-              <input in:fade type="pin" bind:value={adminPass}>
+              <input style="width: 100px;" in:fade type="password" bind:value={adminPass}>
             {/if}
           </div>
           
@@ -256,6 +276,26 @@
     stroke-width: 30;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+  .ticket-section {
+    gap: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    & button {
+      font-size: 3rem;
+      border: none;
+      background: none;
+      color: #3498db;
+    }
+  }
+  .ticket-input {
+    position: absolute;
+    width: 60px;
+    border: none;
+    text-align: center;
+    align-self: center;
+    font-size: 3rem;
   }
   .checkmark {
     color: green;
@@ -290,7 +330,7 @@
     flex-direction: row;
     justify-content: end;
     align-items: center;
-    gap: 15px;
+    gap: 20px;
     
     & p {
       font-size: .7em;
